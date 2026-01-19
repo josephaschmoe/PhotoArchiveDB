@@ -15,6 +15,22 @@
 
 ## 🚀 Installation & Setup
 
+### 🤖 Antigravity Quick Start
+If you are using Google's Antigravity AI, you can automate the entire setup:
+1.  **Create a new Workspace**.
+2.  **Paste this prompt** into the chat:
+    ```text
+    Clone functionality from https://github.com/josephaschmoe/PhotoArchiveDB.git.
+    Setup a python environment, install dependencies from requirements.txt.
+    Run the application.
+    ```
+3.  The agent will set up the environment and start the server for you.
+
+---
+
+### Manual Setup
+If you are setting this up manually:
+
 ### Prerequisites
 *   **Python 3.8+**
 *   **ExifTool**: Must be installed and available in your system PATH.
