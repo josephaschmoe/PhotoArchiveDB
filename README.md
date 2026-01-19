@@ -60,9 +60,9 @@ Open your browser to `http://127.0.0.1:5000`.
 
 ### 1. Building Your Library
 *   Navigate to the **Scan** tab.
-*   Enter the absolute path to your photo folder (e.g., `C:\Users\You\Pictures`).
+*   **Add a Folder**: You can type the path manually or use the **"Browse..."** button to open a system dialog and select your photo folder.
 *   Click **Add Path**.
-*   Click **Scan Now**. The system will index every file, extract metadata, generates thumbnails, and hash the file for duplicate detection.
+*   Click **Scan Now**. The system will index every file, extract metadata, generate thumbnails, and hash the file for duplicate detection.
 *   **Scan All**: Use the "Scan All Libraries" button to update every folder in your list at once.
 
 ### 2. Browsing & Organizing
