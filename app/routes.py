@@ -306,8 +306,7 @@ def open_folder(asset_id):
             # We use subprocess.Popen to avoid blocking the server script
             # Windows Explorer requires backslashes and strict formatting for /select
             norm_path = os.path.normpath(asset.file_path)
-            # Using 'start' via shell=True often helps bring the window to front
-            subprocess.Popen(f'start explorer /select,"{norm_path}"', shell=True)
+            subprocess.Popen(f'explorer /select,"{norm_path}"')
             flash("Opened folder on server.", "success")
     except Exception as e:
         flash(f"Error opening folder: {e}", 'error')
