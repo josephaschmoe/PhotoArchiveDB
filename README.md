@@ -1,6 +1,6 @@
-# ArchiveDB: Your History, De-Siloed.
+# PhotoArchiveDB: Your History, De-Siloed.
 
-**ArchiveDB** is a robust, self-hosted Digital Asset Management (DAM) system built for archivists and photographers who want full control over their data. It treats your local file system as the source of truth, enriching it with a powerful SQLite database for search, organization, and analysis—without locking your files into a proprietary "black box."
+**PhotoArchiveDB** is a robust, self-hosted Digital Asset Management (DAM) system built for archivists and photographers who want full control over their data. It treats your local file system as the source of truth, enriching it with a powerful SQLite database for search, organization, and analysis—without locking your files into a proprietary "black box."
 
 ## Key Features
 
