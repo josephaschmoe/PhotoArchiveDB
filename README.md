@@ -104,15 +104,15 @@ ArchiveDB tracks files by **Content (Hash)**, not just name.
     4.  It **updates the path** in the database.
     5.  All your tags, faces, and metadata are preserved!
 
-### 5. Face Recognition (Beta)
-The system automatically clusters similar faces. You can refine this:
- *   **Add Missing Faces**: Draw a box around a face the AI missed. We even attempt to generate a fingerprint for it so it can be matched later!
- *   **Remove False Positives**: Click "Not a Face" to clean up errors.
- *   **Tuning**: Adjust sensitivity sliders to control how strict user matching should be.
+### 5. Local Face Intelligence (Beta)
+ArchiveDB includes a privacy-first AI engine that runs entirely on your hardware.
+ *   **Automatic clustering**: Group thousands of photos by person without sending data to the cloud.
+ *   **Precision Editing**: Manually tag faces the AI missed or remove incorrect matches with a single click.
+ *   **Customizable Sensitivity**: Fine-tune the matching algorithm's strictness to handle aging or difficult lighting conditions.
 
-### 6. Smart Navigation
- *   **Context Aware**: When you filter by folder or search query, your "Next" and "Previous" buttons respect that list.
- *   **Keyboard Shortcuts**: Use Left/Right arrow keys to breeze through your gallery.
+### 6. Fluid Navigation
+ *   **Context-Preserving**: Whether you are filtering by "Vacation 2023" or "Person: Dad", navigation automatically respects your current view.
+ *   **Keyboard Optimized**: Blaze through thousands of photos using arrow keys, with instant loading and pre-fetching.
 
 ---
 
