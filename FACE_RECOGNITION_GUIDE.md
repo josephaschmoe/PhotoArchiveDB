@@ -64,19 +64,19 @@ Navigation (Next/Prev) is context-aware. If you are filtering by "Folder: Summer
 
 ---
 
-## 5. Standards & Interoperability
+## 5. Standards & Interoperability (Planned)
 
-To ensure your work isn't locked into this application, we adhere to industry standards for metadata.
+To ensure your work isn't locked into this application, we aim to adhere to industry standards for metadata. **(Implementation Pending)**
 
 ### The Standard: XMP-mwg-rs
-We utilize the **Metadata Working Group (MWG)** region schema for storing face tags. This is the **exact same standard** used by:
+We plan to utilize the **Metadata Working Group (MWG)** region schema for storing face tags. This is the **exact same standard** used by:
 *   **Adobe Lightroom Classic**
 *   **DigiKam**
 *   **Picasa (Legacy)**
 *   **Excire Foto** (via XMP sidecar export)
 
 ### Metadata Structure
-When exporting or syncing metadata, we write to the XMP block (embedded or `.xmp` sidecar):
+When exporting or syncing metadata, we will write to the XMP block (embedded or `.xmp` sidecar):
 *   **Namespace**: `http://www.metadataworkinggroup.com/schemas/regions/`
 *   **Prefix**: `mwg-rs`
 *   **Fields**:
@@ -86,14 +86,14 @@ When exporting or syncing metadata, we write to the XMP block (embedded or `.xmp
 
 ---
 
-## 6. Import Workflow (Smart Ingestion)
+## 6. Import Workflow (Smart Ingestion) [Planned]
 
-When PhotoArchiveDB scans a new folder, it checks for existing XMP metadata (from Lightroom, Excire, etc.) to **process pre-tagged images intelligently**.
+Future versions of PhotoArchiveDB will check for existing XMP metadata (from Lightroom, Excire, etc.) to **process pre-tagged images intelligently**.
 
 ### The Logic: "Trust but Verify"
 If an image has existing `XMP-mwg-rs` face regions:
 
-1.  **Skip Detection**: We do NOT need to run the slow face-detection algorithm to find *where* the faces are. We simply read the existing boxes from the XMP.
+1.  **Skip Detection**: We will NOT need to run the slow face-detection algorithm to find *where* the faces are. We simply read the existing boxes from the XMP.
 2.  **Forced Encoding**:
     *   We **MUST** still run the `encoding` pass on those specific crops.
     *   *Why?* XMP stores the *name* and *box*, but not the biometric vector. To allow this face to be found in *future, untagged* photos, we need to generate its biometric signature.
