@@ -167,17 +167,47 @@ def delete_library(id):
 @main.route('/scan/cleanup', methods=['POST'])
 def cleanup_orphans():
     assets = Asset.query.all()
+    library_paths = LibraryPath.query.all()
+    tracked_roots = [lp.path for lp in library_paths]
+    
     deleted_count = 0
+    untracked_count = 0
+    missing_count = 0
+    
     for asset in assets:
+        # Check 1: File must exist on disk
         if not os.path.exists(asset.file_path):
             db.session.delete(asset)
+            missing_count += 1
+            deleted_count += 1
+            continue
+            
+        # Check 2: File must be within a tracked library folder
+        # We need to normalize paths for comparison to be safe
+        is_tracked = False
+        asset_path = os.path.normpath(asset.file_path)
+        for root in tracked_roots:
+            root_path = os.path.normpath(root)
+            # Check if asset_path is inside root_path
+            # commonpath returns the longest common sub-path
+            try:
+                if os.path.commonpath([asset_path, root_path]) == root_path:
+                    is_tracked = True
+                    break
+            except ValueError:
+                # Can happen on Windows if paths are on different drives
+                continue
+                
+        if not is_tracked:
+            db.session.delete(asset)
+            untracked_count += 1
             deleted_count += 1
             
     if deleted_count > 0:
         db.session.commit()
-        flash(f"Cleanup complete. Removed {deleted_count} missing files.", 'success')
+        flash(f"Cleanup complete. Removed {deleted_count} items ({missing_count} missing from disk, {untracked_count} from untracked folders).", 'success')
     else:
-        flash("No missing files found. Database is clean.", 'info')
+        flash("No orphaned files found.", 'info')
         
     return redirect(url_for('main.scan'))
 
