@@ -276,7 +276,9 @@ def open_folder(asset_id):
              flash(f"File not found on disk: {asset.file_path}", 'error')
         else:
             # We use subprocess.Popen to avoid blocking the server script
-            subprocess.Popen(f'explorer /select,"{asset.file_path}"')
+            # Windows Explorer requires backslashes and strict formatting for /select
+            norm_path = os.path.normpath(asset.file_path)
+            subprocess.Popen(f'explorer /select,"{norm_path}"')
             flash("Opened folder on server.", "success")
     except Exception as e:
         flash(f"Error opening folder: {e}", 'error')
