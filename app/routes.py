@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, current_app, flash, redirect, url_for, send_file
 from flask import Blueprint, render_template, current_app, flash, redirect, url_for, send_file, request
+import subprocess
 import os
 from app.models import Asset, Person, Face
 from app import db
@@ -262,6 +263,23 @@ def refresh_metadata(asset_id):
         flash("Metadata successfully refreshed from disk.", "success")
     else:
         flash("Failed to read metadata from file.", "error")
+        
+    return redirect(url_for('main.asset_detail', asset_id=asset_id))
+
+@main.route('/asset/<int:asset_id>/open_folder', methods=['POST'])
+def open_folder(asset_id):
+    asset = Asset.query.get_or_404(asset_id)
+    try:
+        # Windows specific: explorer /select,"path" (highlights the file)
+        # Verify path exists first
+        if not os.path.exists(asset.file_path):
+             flash(f"File not found on disk: {asset.file_path}", 'error')
+        else:
+            # We use subprocess.Popen to avoid blocking the server script
+            subprocess.Popen(f'explorer /select,"{asset.file_path}"')
+            flash("Opened folder on server.", "success")
+    except Exception as e:
+        flash(f"Error opening folder: {e}", 'error')
         
     return redirect(url_for('main.asset_detail', asset_id=asset_id))
 

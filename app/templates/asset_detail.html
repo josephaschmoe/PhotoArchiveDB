@@ -87,6 +87,11 @@
             <div class="card-header">Actions</div>
             <div class="card-body">
                 <!-- Placeholder for future edit/sync actions -->
+                <form method="POST" action="{{ url_for('main.open_folder', asset_id=asset.id) }}">
+                    <button type="submit" class="btn btn-outline-info w-100 mb-2">
+                        <i class="bi bi-folder-symlink"></i> Show in Folder
+                    </button>
+                </form>
                 <a href="{{ url_for('main.refresh_metadata', asset_id=asset.id) }}" class="btn btn-warning w-100 mb-2">
                     <i class="bi bi-arrow-clockwise"></i> Refresh Metadata
                 </a>
