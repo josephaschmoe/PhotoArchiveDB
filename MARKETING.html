@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArchiveDB - Marketing</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+
+        h3 {
+            color: #2980b9;
+            margin-top: 20px;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        ul {
+            margin-bottom: 20px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: Consolas, monospace;
+            color: #e74c3c;
+        }
+
+        .footer {
+            margin-top: 50px;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+            font-style: italic;
+            color: #7f8c8d;
+            text-align: center;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+                max-width: 100%;
+            }
+
+            a {
+                text-decoration: none;
+                color: #333;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>ArchiveDB: Your History, De-Siloed.</h1>
+
+    <p><strong>ArchiveDB</strong> is a robust, self-hosted Digital Asset Management (DAM) system designed for the
+        serious archivist who rejects subscription clouds and proprietary lock-in. Built with a "Files First"
+        philosophy, it turns your chaotic folder of scans into a searchable, portable, and intelligent library.</p>
+
+    <h2>The Philosophy: "Better Than Nothing" became "Better Than Everything"</h2>
+    <p>Most photo managers lock your data into a hidden database. ArchiveDB does the opposite. It treats your
+        <strong>physical files</strong> as the source of truth but gives you the power of a modern database to query
+        them.</p>
+
+    <h2>Key Features</h2>
+
+    <h3>🔍 Deep Metadata Extraction</h3>
+    <p>We don't just read the date. ArchiveDB uses <strong>ExifTool</strong> to extract every scrap of hidden data—from
+        <code>Caption-Abstract</code> to <code>XMP-Description</code>—ensuring no context from your historical scans is
+        lost.</p>
+
+    <h3>🧠 On-Device Face Intelligence (AI)</h3>
+    <p>ArchiveDB inspects your library, detects faces, and clusters them.</p>
+    <ul>
+        <li><strong>Teach it once:</strong> Tell it "This is Grandma."</li>
+        <li><strong>Know it forever:</strong> It finds Grandma in 5,000 other photos automatically.</li>
+        <li><em>Privacy First:</em> Runs 100% locally. No photos are ever sent to the cloud.</li>
+    </ul>
+
+    <h3>🔄 Two-Way "Forever" Sync</h3>
+    <p>This is our killer feature. When you tag a photo or name a face in ArchiveDB, you can <strong>Write Back</strong>
+        that data to the file itself.</p>
+    <ul>
+        <li>Tag "Summer 1985" in the app -> Becomes embedded IPTC metadata in the <code>.jpg</code>.</li>
+        <li>Open that file 20 years from now in any software, and the tag is still there.</li>
+    </ul>
+
+    <h3>⚡ Hybrid SQL/JSON Search</h3>
+    <p>Stop digging through folders.</p>
+    <ul>
+        <li><strong>Structure:</strong> Filter by Date, Camera, or File Type.</li>
+        <li><strong>Flexibility:</strong> Search the full text of letters, descriptions, and obscure metadata tags
+            instantly using our JSON-powered search engine.</li>
+    </ul>
+
+    <h2>Tech Stack</h2>
+    <ul>
+        <li><strong>Core:</strong> Python & Flask (Robust, extensible).</li>
+        <li><strong>Data:</strong> SQLite (Single file, easy backup).</li>
+        <li><strong>Engine:</strong> ExifTool (The industry standard for metadata).</li>
+        <li><strong>Interface:</strong> Clean, responsive Web UI.</li>
+    </ul>
+
+    <div class="footer">
+        ArchiveDB: Because your history belongs to you, not a subscription service.
+    </div>
+
+</body>
+
+</html>

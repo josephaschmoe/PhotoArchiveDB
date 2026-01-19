@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row align-items-center mb-3">
+    <div class="col-md-6">
+        <h3>
+            {% if search_query %}
+            Search Results for "{{ search_query }}" <small class="text-muted">({{ pagination.total }} found)</small>
+            <a href="/" class="btn btn-sm btn-outline-secondary ms-2">Clear</a>
+            {% elif path_filter %}
+            <span class="badge bg-secondary mb-1">Folder Filter</span><br>
+            <small class="fs-6 text-muted text-break">{{ path_filter }}</small>
+            <a href="/" class="btn btn-sm btn-outline-danger ms-2">Clear Filter</a>
+            {% else %}
+            Library <small class="text-muted">({{ pagination.total }} items)</small>
+            {% endif %}
+        </h3>
+    </div>
+    <div class="col-md-6 text-end">
+        <div class="btn-group" role="group">
+            <button id="sortBtn" type="button" class="btn btn-outline-secondary dropdown-toggle"
+                data-bs-toggle="dropdown" aria-expanded="false">
+                Sort:
+                {% if sort_by == 'date_desc' %}Date (Newest){% endif %}
+                {% if sort_by == 'date_asc' %}Date (Oldest){% endif %}
+                {% if sort_by == 'added_desc' %}Added (Newest){% endif %}
+                {% if sort_by == 'added_asc' %}Added (Oldest){% endif %}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="sortBtn">
+                <li><a class="dropdown-item {% if sort_by == 'date_desc' %}active{% endif %}"
+                        href="{{ url_for(request.endpoint, q=search_query, sort='date_desc') }}">Date (Newest)</a></li>
+                <li><a class="dropdown-item {% if sort_by == 'date_asc' %}active{% endif %}"
+                        href="{{ url_for(request.endpoint, q=search_query, sort='date_asc') }}">Date (Oldest)</a></li>
+                <li>
+                    <hr class="dropdown-divider">
+                </li>
+                <li><a class="dropdown-item {% if sort_by == 'added_desc' %}active{% endif %}"
+                        href="{{ url_for(request.endpoint, q=search_query, sort='added_desc') }}">Added (Newest)</a>
+                </li>
+                <li><a class="dropdown-item {% if sort_by == 'added_asc' %}active{% endif %}"
+                        href="{{ url_for(request.endpoint, q=search_query, sort='added_asc') }}">Added (Oldest)</a></li>
+            </ul>
+        </div>
+        <a href="{{ url_for('main.browse_folders') }}" class="btn btn-outline-primary ms-2"><i class="bi bi-folder"></i>
+            Folder View</a>
+    </div>
+</div>
+
+<div class="row">
+    {% for asset in assets %}
+    <div class="col-md-3 col-sm-6 mb-4">
+        <div class="card asset-card h-100 shadow-sm">
+            <a href="{{ url_for('main.asset_detail', asset_id=asset.id) }}" class="text-decoration-none">
+                {% if asset.media_type in ['jpg', 'jpeg', 'png', 'gif', 'webp'] %}
+                <img src="{{ url_for('main.serve_thumbnail', asset_id=asset.id) }}" class="card-img-top asset-thumb"
+                    alt="{{ asset.title }}" loading="lazy">
+                {% else %}
+                <div
+                    class="card-img-top asset-thumb d-flex align-items-center justify-content-center bg-secondary text-white">
+                    {{ asset.media_type|upper }}
+                </div>
+                {% endif %}
+            </a>
+            <div class="card-body p-2">
+                <h6 class="card-title text-truncate mb-1" title="{{ asset.title or asset.file_path }}">
+                    <a href="{{ url_for('main.asset_detail', asset_id=asset.id) }}"
+                        class="text-decoration-none text-dark stretched-link">
+                        {{ asset.title or 'Untitled' }}
+                    </a>
+                </h6>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">{{ asset.captured_at.strftime('%Y-%m-%d') if asset.captured_at else
+                        'Unknown Date' }}</small>
+                    {% if asset.meta_json and asset.meta_json.get('AIGenerationInfo') %}
+                    <span class="badge bg-info text-dark" title="AI Generated">AI</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center py-5">
+        <h4 class="text-muted">No assets found.</h4>
+        <p>Run a scan to begin populating your archive.</p>
+        <a href="{{ url_for('main.scan') }}" class="btn btn-primary">Start Scan</a>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if pagination.pages > 1 %}
+<nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+            <a class="page-link"
+                href="{{ url_for(request.endpoint, page=pagination.prev_num, q=search_query, sort=sort_by) }}"
+                aria-label="Previous">
+                <span aria-hidden="true">&laquo; Previous</span>
+            </a>
+        </li>
+
+        <li class="page-item disabled">
+            <span class="page-link">
+                Page {{ pagination.page }} of {{ pagination.pages }}
+            </span>
+        </li>
+
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+            <a class="page-link"
+                href="{{ url_for(request.endpoint, page=pagination.next_num, q=search_query, sort=sort_by) }}"
+                aria-label="Next">
+                <span aria-hidden="true">Next &raquo;</span>
+            </a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

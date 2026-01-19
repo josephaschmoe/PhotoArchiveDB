@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="mb-3">
+    <h3>
+        <a href="{{ url_for('main.index') }}" class="text-decoration-none text-muted">Library</a>
+        <span class="text-muted mx-2">/</span>
+        Folder View
+    </h3>
+
+    {% if not is_root %}
+    <div class="card p-3 bg-light border-0 shadow-sm">
+        <label class="text-muted small fw-bold text-uppercase">Current Location</label>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <code class="text-dark fs-5 text-break">{{ current_path }}</code>
+
+            <div class="btn-group">
+                <a href="{{ url_for('main.browse_folders', path=parent_path) }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-up"></i> Up Level
+                </a>
+                <a href="{{ url_for('main.index', path_filter=current_path) }}" class="btn btn-primary">
+                    <i class="bi bi-filter-circle"></i> Show All Photos Recursive
+                </a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle-fill me-2"></i> Select a library root folder to begin browsing.
+    </div>
+    {% endif %}
+</div>
+
+<div class="row">
+    <!-- Folders -->
+    {% for folder in folders %}
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card h-100 folder-card border-warning">
+            <div class="card-body text-center">
+                {% if is_root %}
+                <!-- Roots are full paths -->
+                <a href="{{ url_for('main.browse_folders', path=folder) }}" class="text-decoration-none stretched-link">
+                    <i class="bi bi-hdd-network display-4 text-warning"></i>
+                    <h6 class="mt-2 text-dark text-break">{{ folder }}</h6>
+                </a>
+                {% else %}
+                <!-- Subfolders are just names -->
+                <a href="{{ url_for('main.browse_folders', path=current_path ~ '\\' ~ folder) }}"
+                    class="text-decoration-none stretched-link">
+                    <i class="bi bi-folder-fill display-4 text-warning"></i>
+                    <h6 class="mt-2 text-dark text-truncate">{{ folder }}</h6>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Files -->
+    {% if not is_root and files %}
+    <div class="col-12 mt-4 mb-2">
+        <h5>Files in this folder</h5>
+    </div>
+    {% for item in files %}
+    <div class="col-md-3 col-sm-6 mb-4">
+        <div class="card asset-card h-100 shadow-sm">
+            {% if item.asset %}
+            <a href="{{ url_for('main.asset_detail', asset_id=item.asset.id) }}">
+                {% if item.asset.media_type in ['jpg', 'jpeg', 'png', 'gif', 'webp'] %}
+                <img src="{{ url_for('main.serve_thumbnail', asset_id=item.asset.id) }}"
+                    class="card-img-top asset-thumb" alt="{{ item.name }}" loading="lazy">
+                {% else %}
+                <div
+                    class="card-img-top asset-thumb d-flex align-items-center justify-content-center bg-secondary text-white">
+                    {{ item.asset.media_type|upper }}
+                </div>
+                {% endif %}
+            </a>
+            {% else %}
+            <!-- File exists but not in DB -->
+            <div class="card-img-top asset-thumb d-flex align-items-center justify-content-center bg-light text-muted">
+                <span class="small">Not Scanned</span>
+            </div>
+            {% endif %}
+
+            <div class="card-body p-2">
+                <h6 class="card-title text-truncate mb-1" title="{{ item.name }}">
+                    {% if item.asset %}
+                    <a href="{{ url_for('main.asset_detail', asset_id=item.asset.id) }}"
+                        class="text-decoration-none text-dark">
+                        {{ item.asset.title or item.name }}
+                    </a>
+                    {% else %}
+                    {{ item.name }}
+                    {% endif %}
+                </h6>
+                {% if item.asset %}
+                <small class="text-muted">{{ item.asset.captured_at.strftime('%Y-%m-%d') if item.asset.captured_at else
+                    'Unknown Date' }}</small>
+                {% else %}
+                <small class="text-danger">Unmanaged File</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if not folders and not files and not is_root %}
+    <div class="col-12 text-center text-muted mt-5">
+        <h4>This folder is empty.</h4>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

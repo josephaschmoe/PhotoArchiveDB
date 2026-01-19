@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white">
+                <h4 class="mb-0">Library Manager</h4>
+            </div>
+            <div class="card-body">
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show"
+                    role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <!-- Existing Libraries -->
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <h5 class="mb-0">Your Folders</h5>
+                    <form method="POST" action="{{ url_for('main.scan_all_libraries') }}">
+                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-collection-play"></i> Scan All Libraries
+                        </button>
+                    </form>
+                </div>
+                {% if libraries %}
+                <ul class="list-group mb-4">
+                    {% for lib in libraries %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ lib.path }}</strong><br>
+                            <small class="text-muted">Last Scanned: {{ lib.last_scanned or 'Never' }}</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <form method="POST" action="{{ url_for('main.scan') }}">
+                                <input type="hidden" name="scan_id" value="{{ lib.id }}">
+                                <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+                                    <i class="bi bi-arrow-repeat"></i> Scan Now
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('main.delete_library', id=lib.id) }}"
+                                onsubmit="return confirm('Are you sure you want to stop tracking this folder? Existing photos from this folder will remain in the database.');">
+                                <button type="submit" class="btn btn-outline-danger btn-sm text-nowrap">
+                                    <i class="bi bi-trash"></i> Remove
+                                </button>
+                            </form>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">No folders added yet. Add a source folder below.</p>
+                {% endif %}
+
+                <hr>
+
+                <!-- Add New -->
+                <!-- Add New -->
+                <h5 class="mt-4">Track New Folder</h5>
+                <form method="POST" action="{{ url_for('main.scan') }}" class="row g-3">
+                    <div class="col-sm-9">
+                        <div class="input-group">
+                            <input type="text" class="form-control" name="new_path" id="new_path_input"
+                                placeholder="C:\Photos\2023_Vacation" required>
+                            <button class="btn btn-outline-secondary" type="button" id="browseBtn">Browse...</button>
+                        </div>
+                        <div class="form-text">Paste the path or use Browse to select a folder on this computer.</div>
+                    </div>
+                    <div class="col-sm-3">
+                        <button type="submit" class="btn btn-success w-100">Add Path</button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('browseBtn').addEventListener('click', function () {
+        fetch('/browse_folder')
+            .then(response => response.json())
+            .then(data => {
+                if (data.path) {
+                    document.getElementById('new_path_input').value = data.path;
+                } else if (data.error) {
+                    alert('Error opening dialog: ' + data.error);
+                }
+            })
+            .catch(err => console.error('Error:', err));
+    });
+</script>
+
+<script>
+    // Show Loading Overlay on Scan Submit
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function () {
+            const btn = this.querySelector('button[type="submit"]');
+            if (btn) {
+                document.getElementById('scanOverlay').style.display = 'flex';
+            }
+        });
+    });
+</script>
+
+<!-- Full Screen Loading Overlay -->
+<div id="scanOverlay"
+    style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center; flex-direction: column;">
+    <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;"></div>
+    <h3 class="text-light mt-3">Scanning Library...</h3>
+    <p class="text-light">This may take a while for large folders.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <h3>People</h3>
+        <form method="POST" class="input-group mb-3">
+            <input type="text" name="name" class="form-control" placeholder="New Person Name">
+            <button class="btn btn-primary" type="submit">Add</button>
+        </form>
+        <div class="list-group">
+            {% for person in people %}
+            <a href="#"
+                class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                {{ person.name }}
+                <span class="badge bg-primary rounded-pill">{{ person.faces.count() }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <h3>Unknown Faces</h3>
+        <div class="row">
+            {% for face in unknown_faces %}
+            <div class="col-md-3 mb-3">
+                <div class="card">
+                    <!-- Crop face? For now showing full image with face logic is hard in CSS without crop coordinates. -->
+                    <!-- We'll just show the full image, it's MVP. -->
+                    <img src="{{ url_for('main.serve_thumbnail', asset_id=face.asset_id) }}" class="card-img-top"
+                        style="height: 100px; object-fit: cover;">
+                    <div class="card-body p-2">
+                        <small class="text-muted">Confidence: {{ "%.2f"|format(face.confidence or 0) }}</small>
+                        <div class="dropdown mt-2">
+                            <button class="btn btn-sm btn-secondary dropdown-toggle w-100" type="button"
+                                data-bs-toggle="dropdown">
+                                Assign
+                            </button>
+                            <ul class="dropdown-menu">
+                                {% for person in people %}
+                                <li><a class="dropdown-item"
+                                        href="{{ url_for('main.assign_face', face_id=face.id, person_id=person.id) }}">{{
+                                        person.name }}</a></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-12">
+                <p class="text-muted">No unknown faces found.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
