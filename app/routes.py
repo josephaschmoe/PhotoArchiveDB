@@ -147,10 +147,38 @@ def browse_folders():
 def delete_library(id):
     lp = LibraryPath.query.get_or_404(id)
     path_name = lp.path
+    
+    # Automatic Cleanup: Remove assets associated with this path
+    search_path = path_name
+    if not search_path.endswith(os.path.sep):
+        search_path += os.path.sep
+        
+    assets_to_delete = Asset.query.filter(Asset.file_path.startswith(search_path)).all()
+    count = len(assets_to_delete)
+    
+    for asset in assets_to_delete:
+        db.session.delete(asset)
+
     db.session.delete(lp)
     db.session.commit()
-    flash(f"Stopped tracking folder: {path_name}", 'success')
-    flash(f"Stopped tracking folder: {path_name}", 'success')
+    flash(f"Stopped tracking folder: {path_name} and removed {count} associated records.", 'success')
+    return redirect(url_for('main.scan'))
+
+@main.route('/scan/cleanup', methods=['POST'])
+def cleanup_orphans():
+    assets = Asset.query.all()
+    deleted_count = 0
+    for asset in assets:
+        if not os.path.exists(asset.file_path):
+            db.session.delete(asset)
+            deleted_count += 1
+            
+    if deleted_count > 0:
+        db.session.commit()
+        flash(f"Cleanup complete. Removed {deleted_count} missing files.", 'success')
+    else:
+        flash("No missing files found. Database is clean.", 'info')
+        
     return redirect(url_for('main.scan'))
 
 @main.route('/scan/all', methods=['POST'])
@@ -278,7 +306,8 @@ def open_folder(asset_id):
             # We use subprocess.Popen to avoid blocking the server script
             # Windows Explorer requires backslashes and strict formatting for /select
             norm_path = os.path.normpath(asset.file_path)
-            subprocess.Popen(f'explorer /select,"{norm_path}"')
+            # Using 'start' via shell=True often helps bring the window to front
+            subprocess.Popen(f'start explorer /select,"{norm_path}"', shell=True)
             flash("Opened folder on server.", "success")
     except Exception as e:
         flash(f"Error opening folder: {e}", 'error')

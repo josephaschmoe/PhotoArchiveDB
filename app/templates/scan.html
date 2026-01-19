@@ -24,11 +24,19 @@
                 <!-- Existing Libraries -->
                 <div class="d-flex justify-content-between align-items-center mt-3">
                     <h5 class="mb-0">Your Folders</h5>
-                    <form method="POST" action="{{ url_for('main.scan_all_libraries') }}">
-                        <button type="submit" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-collection-play"></i> Scan All Libraries
-                        </button>
-                    </form>
+                    <div class="d-flex gap-2">
+                        <form method="POST" action="{{ url_for('main.cleanup_orphans') }}"
+                            onsubmit="return confirm('This will verify every file in the database exists on disk and remove any records that are missing. This cannot be undone.');">
+                            <button type="submit" class="btn btn-outline-warning btn-sm">
+                                <i class="bi bi-eraser"></i> Clean Missing Files
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('main.scan_all_libraries') }}">
+                            <button type="submit" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-collection-play"></i> Scan All Libraries
+                            </button>
+                        </form>
+                    </div>
                 </div>
                 {% if libraries %}
                 <ul class="list-group mb-4">
