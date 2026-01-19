@@ -2,7 +2,7 @@ Flask
 SQLAlchemy
 Flask-SQLAlchemy
 Pillow
-# face_recognition  <-- Requires C++ tools (dlib). Uncomment if installed.
+face_recognition  <-- Requires C++ tools (dlib). Uncomment if installed.
 numpy
 # For ExifTool, we typically use pyexiftool or just subprocess calls. 
 # SPEC said "via Python wrapper", pyexiftool is a good standard wrapper.

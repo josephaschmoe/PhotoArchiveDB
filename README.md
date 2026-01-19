@@ -110,10 +110,17 @@ ArchiveDB tracks files by **Content (Hash)**, not just name.
 
 We are actively working on making ArchiveDB smarter. Here is what is coming next:
 
-### 🚧 Face Recognition (Completing the Beta)
-The backend logic for face detection is in place (`app/services/vision.py`), but the setup requires external C++ dependencies (`dlib`).
-*   **Goal**: Simplify the installation process for non-technical users.
-*   **Feature**: Complete the "Person Naming" UI to allow merging unknown face clusters into named People profiles.
+### 🚧 Face Recognition (Beta)
+The backend logic for face detection is powered by `dlib` and `face_recognition`.
+*   **Face Clusters**: Automatically groups similar faces.
+*   **Manual Control**: 
+    *   **Add Missing Faces**: Draw a box around a face the AI missed. We even attempt to generate a fingerprint for it so it can be matched later!
+    *   **Remove False Positives**: Click "Not a Face" to clean up errors.
+    *   **Tuning**: Adjust sensitivity sliders to control how strict user matching should be.
+
+### 🧭 Smart Navigation
+*   **Context Aware**: When you filter by folder or search query, your "Next" and "Previous" buttons respect that list. You won't get lost jumping between unrelated photos.
+*   **Keyboard Shortcuts**: Use Left/Right arrow keys to breeze through your gallery.
 
 ### ✍️ Metadata Write-Back
 Currently, we read metadata perfectly. The next major milestone is **Two-Way Sync**.

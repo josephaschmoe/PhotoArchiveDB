@@ -7,7 +7,7 @@ from app import db
 from datetime import datetime
 from app.services.scanner import scan_directory
 from app.models import Asset, Person, Face, LibraryPath
-from app.services.vision import process_all_faces
+from app.services.vision import process_all_faces, scan_unknowns_for_match
 from app.services.metadata import write_metadata, extract_ai_info, extract_camera_info, extract_gps_info, get_metadata
 from app.utils import generate_thumbnail
 
@@ -279,14 +279,60 @@ def serve_image(asset_id):
 @main.route('/asset/<int:asset_id>/thumb')
 def serve_thumbnail(asset_id):
     asset = Asset.query.get_or_404(asset_id)
+    face_id = request.args.get('face_id')
     
-    # Only generate thumbs for images
+    # Simple file serving if it's not an image (video etc)
     if asset.media_type not in ['jpg', 'jpeg', 'png', 'gif', 'webp']:
-         # For non-images, we might want a placeholder or just 404? 
-         # But the UI handles this by checking media_type.
-         # If called anyway, serve full file or a placeholder?
-         # Let's serve full file as fallback/placeholder logic is in UI.
          return send_file(asset.file_path)
+
+    # If face_id provided, crop on the fly!
+    if face_id:
+        face = Face.query.get(face_id)
+        if face and face.location:
+            try:
+                from PIL import Image
+                import io
+                
+                # Verify calling PIL for every request might be slow, 
+                # but for local app it's often acceptable. Caching is better.
+                # For now, on-the-fly.
+                
+                # location is [top, right, bottom, left]
+                top, right, bottom, left = face.location
+                
+                # Add some padding?
+                h = bottom - top
+                w = right - left
+                pad_h = int(h * 0.2)
+                pad_w = int(w * 0.2)
+                
+                with Image.open(asset.file_path) as img:
+                    width, height = img.size
+                    
+                    # Safe crop coords
+                    crop_top = max(0, top - pad_h)
+                    crop_bottom = min(height, bottom + pad_h)
+                    crop_left = max(0, left - pad_w)
+                    crop_right = min(width, right + pad_w)
+                    
+                    face_img = img.crop((crop_left, crop_top, crop_right, crop_bottom))
+                    
+                    # Resize for thumbnail consistency? 
+                    # Let's keep it close to actual max-size or fixed thumb size
+                    face_img.thumbnail((200, 200))
+                    
+                    img_io = io.BytesIO()
+                    # Convert to RGB if needed (swallow errors for RGBA -> JPEG)
+                    if face_img.mode in ('RGBA', 'P'):
+                        face_img = face_img.convert('RGB')
+                        
+                    face_img.save(img_io, 'JPEG', quality=85)
+                    img_io.seek(0)
+                    return send_file(img_io, mimetype='image/jpeg')
+            except Exception as e:
+                print(f"Error cropping face: {e}")
+                # Fallback to full thumb
+                pass
 
     thumb_path = generate_thumbnail(asset.file_path, asset_id)
     
@@ -299,11 +345,151 @@ def serve_thumbnail(asset_id):
 @main.route('/asset/<int:asset_id>')
 def asset_detail(asset_id):
     asset = Asset.query.get_or_404(asset_id)
+    
+    # Navigation Logic (Previous/Next)
+    sort_by = request.args.get('sort', 'date_desc')
+    path_filter = request.args.get('path_filter')
+    
+    # Context for "Back to ..." button
+    view_mode = request.args.get('view_mode', 'library') # 'library' or 'folder'
+    folder_path = request.args.get('folder_path')
+    
+    back_url = url_for('main.index', sort=sort_by, path_filter=path_filter)
+    back_label = "Back to Library"
+    
+    if view_mode == 'folder' and folder_path:
+        back_url = url_for('main.browse_folders', path=folder_path)
+        back_label = "Back to Folder"
+        # For next/prev in folder mode, we might want to respect the folder sort order (usually name)
+        # But for now, let's keep the standard sort unless we implement folder-specific sorting.
+        # If user came from folder, path_filter should effectively be the folder_path to valid next/prev?
+        # Actually asset_detail doesn't know the file list from browse_folders logic. 
+        # But if we treat 'path_filter' as the folder path, our existing next/prev logic works!
+        if not path_filter:
+            path_filter = folder_path
+
+    query = Asset.query
+    if path_filter:
+        pf = path_filter
+        if not pf.endswith(os.path.sep):
+            pf += os.path.sep
+        query = query.filter(Asset.file_path.startswith(pf))
+
+    if sort_by == 'date_asc':
+        query = query.order_by(Asset.captured_at.asc())
+    elif sort_by == 'added_desc':
+        query = query.order_by(Asset.added_at.desc())
+    elif sort_by == 'added_asc':
+        query = query.order_by(Asset.added_at.asc())
+    else: # date_desc default
+        query = query.order_by(Asset.captured_at.desc())
+        
+    # Get all IDs in order. 
+    # Performance note: fetching all IDs might be slow for massive DBs. 
+    # For < 50k items, it's roughly okay. For larger, we'd need a subquery or window function.
+    # Assuming local app scale for now.
+    all_assets = query.with_entities(Asset.id).all()
+    # all_assets is list of tuples (id,)
+    asset_ids = [a[0] for a in all_assets]
+    
+    prev_id = None
+    next_id = None
+    
+    try:
+        curr_idx = asset_ids.index(asset_id)
+        if curr_idx > 0:
+            prev_id = asset_ids[curr_idx - 1]
+        if curr_idx < len(asset_ids) - 1:
+            next_id = asset_ids[curr_idx + 1]
+    except ValueError:
+        # Asset might not be in the current filter
+        pass
+    
+    # Prepare face data for the frontend overlay
+    faces_data = []
+    for face in asset.faces:
+        loc = face.location if face.location else [0, 0, 0, 0]
+        faces_data.append({
+            'id': face.id,
+            'top': loc[0],
+            'right': loc[1],
+            'bottom': loc[2],
+            'left': loc[3],
+            'name': face.person.name if face.person else 'Unknown',
+            'is_confirmed': face.is_confirmed
+        })
+
     ai_info = extract_ai_info(asset.meta_json)
     camera_info = extract_camera_info(asset.meta_json)
     gps_info = extract_gps_info(asset.meta_json)
-    gps_info = extract_gps_info(asset.meta_json)
-    return render_template('asset_detail.html', asset=asset, ai_info=ai_info, camera_info=camera_info, gps_info=gps_info)
+    
+    # Fetch people for assignment dropdown
+    people = Person.query.order_by(Person.name).all()
+    
+    return render_template('asset_detail.html', 
+                         asset=asset, 
+                         ai_info=ai_info, 
+                         camera_info=camera_info, 
+                         gps_info=gps_info,
+                         faces_data=faces_data,
+                         people=people,
+                         prev_id=prev_id,
+                         next_id=next_id,
+                         current_sort=sort_by,
+                         current_filter=path_filter,
+                         back_url=back_url,
+                         back_label=back_label,
+                         view_mode=view_mode,
+                         folder_path=folder_path)
+
+@main.route('/face/<int:face_id>/delete', methods=['POST'])
+def delete_face(face_id):
+    face = Face.query.get_or_404(face_id)
+    asset_id = face.asset_id
+    db.session.delete(face)
+    db.session.commit()
+    flash("Face deleted.", "info")
+    return redirect(url_for('main.asset_detail', asset_id=asset_id))
+
+@main.route('/asset/<int:asset_id>/add_face', methods=['POST'])
+def add_manual_face(asset_id):
+    asset = Asset.query.get_or_404(asset_id)
+    
+    try:
+        top = int(float(request.form.get('top')))
+        right = int(float(request.form.get('right')))
+        bottom = int(float(request.form.get('bottom')))
+        left = int(float(request.form.get('left')))
+        
+        # Validation
+        if top < 0 or left < 0:
+            raise ValueError("Negative coordinates")
+            
+        from app.services.vision import encode_face_region
+        
+        # Try to compute encoding for future matching
+        encoding_blob = encode_face_region(asset.file_path, top, right, bottom, left)
+
+        face = Face(
+            asset_id=asset.id,
+            location=[top, right, bottom, left],
+            person_id=None, # Unknown
+            is_confirmed=False,
+            encoding=encoding_blob, # Store if found
+            confidence=1.0 # Manual = 100% confidence it's a face
+        )
+        db.session.add(face)
+        db.session.commit()
+        
+        if encoding_blob:
+            flash("New face added manually (and analyzed for matching).", "success")
+        else:
+            flash("New face added manually (but could not be analyzed for matching - image data too vague).", "warning")
+        
+    except Exception as e:
+        flash(f"Error adding face: {e}", "error")
+        
+    return redirect(url_for('main.asset_detail', asset_id=asset_id))
 
 @main.route('/asset/<int:asset_id>/refresh_metadata')
 def refresh_metadata(asset_id):
@@ -343,10 +529,14 @@ def open_folder(asset_id):
         
     return redirect(url_for('main.asset_detail', asset_id=asset_id))
 
-@main.route('/process_faces')
+@main.route('/process_faces', methods=['POST'])
 def trigger_face_processing():
-    count = process_all_faces()
-    return f"Processed {count} images for faces. <a href='/'>Back to Home</a>"
+    try:
+        count = process_all_faces()
+        flash(f"Processed {count} images for faces.", 'success')
+    except Exception as e:
+        flash(f"Error processing faces: {str(e)}", 'error')
+    return redirect(url_for('main.scan'))
 
 @main.route('/people', methods=['GET', 'POST'])
 def people():
@@ -362,6 +552,23 @@ def people():
     unknown_faces = Face.query.filter_by(person_id=None).limit(50).all()
     return render_template('people.html', people=people, unknown_faces=unknown_faces)
 
+@main.route('/person/<int:person_id>/rename', methods=['POST'])
+def rename_person(person_id):
+    person = Person.query.get_or_404(person_id)
+    new_name = request.form.get('new_name')
+    
+    if new_name:
+        # Check uniqueness
+        existing = Person.query.filter_by(name=new_name).first()
+        if existing and existing.id != person.id:
+            flash(f"Name '{new_name}' already exists. Please choose another.", "error")
+        else:
+            person.name = new_name
+            db.session.commit()
+            flash(f"Renamed to {new_name}.", "success")
+            
+    return redirect(url_for('main.person_detail', person_id=person.id))
+
 @main.route('/face/<int:face_id>/assign/<int:person_id>')
 def assign_face(face_id, person_id):
     face = Face.query.get_or_404(face_id)
@@ -369,6 +576,148 @@ def assign_face(face_id, person_id):
     face.is_confirmed = True
     db.session.commit()
     return redirect(url_for('main.people'))
+
+@main.route('/person/<int:person_id>')
+def person_detail(person_id):
+    person = Person.query.get_or_404(person_id)
+    confirmed_faces = Face.query.filter_by(person_id=person.id, is_confirmed=True).all()
+    suggested_faces = Face.query.filter_by(person_id=person.id, is_confirmed=False).all()
+    
+    # Fetch all people for the reassignment modal
+    people = Person.query.order_by(Person.name).all()
+    
+    # We need asset data for thumbnails
+    return render_template('person_detail.html', 
+                         person=person, 
+                         confirmed=confirmed_faces, 
+                         suggested=suggested_faces,
+                         people=people)
+
+@main.route('/face/<int:face_id>/confirm/<int:person_id>')
+def confirm_face(face_id, person_id):
+    face = Face.query.get_or_404(face_id)
+    face.person_id = person_id
+    face.is_confirmed = True
+    db.session.commit()
+    flash("Face confirmed.", "success")
+    return redirect(url_for('main.person_detail', person_id=person_id))
+
+@main.route('/face/<int:face_id>/remove')
+def remove_face(face_id):
+    face = Face.query.get_or_404(face_id)
+    old_person_id = face.person_id
+    
+    # Store rejection memory if it was assigned/suggested to a person
+    if old_person_id:
+        person = Person.query.get(old_person_id)
+        if person:
+            # Check if likely already rejected? (Set lookup handles dups usually, but append is safe)
+            # using the relationship
+            if face not in person.rejected_faces:
+                person.rejected_faces.append(face)
+    
+    face.person_id = None
+    face.is_confirmed = False
+    db.session.commit()
+    flash("Face removed/rejected.", "info")
+    if old_person_id:
+        return redirect(url_for('main.person_detail', person_id=old_person_id))
+    return redirect(url_for('main.people'))
+
+@main.route('/person/<int:person_id>/find_matches', methods=['POST'])
+def find_matches(person_id):
+    try:
+        count = scan_unknowns_for_match(person_id)
+        if count > 0:
+            flash(f"Found {count} new potential matches!", "success")
+        else:
+            flash("No new matches found in unknown faces.", "info")
+    except Exception as e:
+        flash(f"Error scanning for matches: {e}", "error")
+        
+    return redirect(url_for('main.person_detail', person_id=person_id))
+
+@main.route('/person/<int:person_id>/confirm_all', methods=['POST'])
+def confirm_all_matches(person_id):
+    person = Person.query.get_or_404(person_id)
+    # Find all unconfirmed faces for this person
+    count = Face.query.filter_by(person_id=person.id, is_confirmed=False).update({
+        'is_confirmed': True
+    })
+    db.session.commit()
+    
+    if count > 0:
+        flash(f"Confirmed {count} faces for {person.name}.", "success")
+    else:
+        flash("No suggested matches found to confirm.", "info")
+        
+    return redirect(url_for('main.person_detail', person_id=person_id))
+
+@main.route('/person/<int:person_id>/reject_all', methods=['POST'])
+def reject_all_matches(person_id):
+    person = Person.query.get_or_404(person_id)
+    # Find all unconfirmed faces for this person
+    faces_to_reject = Face.query.filter_by(person_id=person.id, is_confirmed=False).all()
+    
+    count = 0
+    for face in faces_to_reject:
+        if face not in person.rejected_faces:
+            person.rejected_faces.append(face)
+        face.person_id = None
+        face.is_confirmed = False
+        count += 1
+        
+    db.session.commit()
+    
+    if count > 0:
+        flash(f"Rejected {count} faces for {person.name}.", "info")
+    else:
+        flash("No suggested matches found to reject.", "info")
+        
+    return redirect(url_for('main.person_detail', person_id=person_id))
+
+@main.route('/assign_face_form', methods=['POST'])
+def assign_face_form():
+    face_id = request.form.get('face_id')
+    action = request.form.get('action') # 'save' or 'remove'
+    
+    face = Face.query.get_or_404(face_id)
+    
+    if action == 'remove':
+        old_name = face.person.name if face.person else 'Unknown'
+        face.person_id = None
+        face.is_confirmed = False
+        db.session.commit()
+        flash(f"Unassigned face (was {old_name}).", "info")
+        return redirect(url_for('main.asset_detail', asset_id=face.asset_id))
+        
+    person_id = request.form.get('person_id') # From dropdown
+    new_person_name = request.form.get('new_person_name') # Explicit new name
+    
+    target_person = None
+    
+    if new_person_name and new_person_name.strip():
+        # Create new person
+        name = new_person_name.strip()
+        target_person = Person.query.filter_by(name=name).first()
+        if not target_person:
+            target_person = Person(name=name)
+            db.session.add(target_person)
+            db.session.flush() # get ID
+            flash(f"Created new person: {target_person.name}", "success")
+    elif person_id:
+        target_person = Person.query.get(person_id)
+        
+    if target_person:
+        face.person = target_person
+        face.is_confirmed = True
+        db.session.commit()
+        flash(f"Face assigned to {target_person.name}.", "success")
+    else:
+        flash("No person selected or created.", "warning")
+        
+    return redirect(url_for('main.asset_detail', asset_id=face.asset_id))
+
 
 @main.route('/sync')
 def sync_all():

@@ -65,7 +65,8 @@
     <div class="col-md-3 col-sm-6 mb-4">
         <div class="card asset-card h-100 shadow-sm">
             {% if item.asset %}
-            <a href="{{ url_for('main.asset_detail', asset_id=item.asset.id) }}">
+            <a
+                href="{{ url_for('main.asset_detail', asset_id=item.asset.id, view_mode='folder', folder_path=current_path) }}">
                 {% if item.asset.media_type in ['jpg', 'jpeg', 'png', 'gif', 'webp'] %}
                 <img src="{{ url_for('main.serve_thumbnail', asset_id=item.asset.id) }}"
                     class="card-img-top asset-thumb" alt="{{ item.name }}" loading="lazy">
@@ -86,7 +87,7 @@
             <div class="card-body p-2">
                 <h6 class="card-title text-truncate mb-1" title="{{ item.name }}">
                     {% if item.asset %}
-                    <a href="{{ url_for('main.asset_detail', asset_id=item.asset.id) }}"
+                    <a href="{{ url_for('main.asset_detail', asset_id=item.asset.id, view_mode='folder', folder_path=current_path) }}"
                         class="text-decoration-none text-dark">
                         {{ item.asset.title or item.name }}
                     </a>

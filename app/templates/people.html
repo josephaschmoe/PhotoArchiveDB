@@ -10,7 +10,7 @@
         </form>
         <div class="list-group">
             {% for person in people %}
-            <a href="#"
+            <a href="{{ url_for('main.person_detail', person_id=person.id) }}"
                 class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                 {{ person.name }}
                 <span class="badge bg-primary rounded-pill">{{ person.faces.count() }}</span>
@@ -25,10 +25,11 @@
             {% for face in unknown_faces %}
             <div class="col-md-3 mb-3">
                 <div class="card">
-                    <!-- Crop face? For now showing full image with face logic is hard in CSS without crop coordinates. -->
-                    <!-- We'll just show the full image, it's MVP. -->
-                    <img src="{{ url_for('main.serve_thumbnail', asset_id=face.asset_id) }}" class="card-img-top"
-                        style="height: 100px; object-fit: cover;">
+                    <!-- Showing cropped face thumbnail now -->
+                    <a href="{{ url_for('main.asset_detail', asset_id=face.asset_id) }}">
+                        <img src="{{ url_for('main.serve_thumbnail', asset_id=face.asset_id, face_id=face.id) }}"
+                            class="card-img-top" style="height: 100px; object-fit: cover;">
+                    </a>
                     <div class="card-body p-2">
                         <small class="text-muted">Confidence: {{ "%.2f"|format(face.confidence or 0) }}</small>
                         <div class="dropdown mt-2">
@@ -37,11 +38,21 @@
                                 Assign
                             </button>
                             <ul class="dropdown-menu">
+                                {% if people %}
                                 {% for person in people %}
                                 <li><a class="dropdown-item"
                                         href="{{ url_for('main.assign_face', face_id=face.id, person_id=person.id) }}">{{
                                         person.name }}</a></li>
                                 {% endfor %}
+                                {% else %}
+                                <li><span class="dropdown-item disabled">No people added yet</span></li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li><a class="dropdown-item" href="#"
+                                        onclick="document.querySelector('input[name=name]').focus(); return false;">Add
+                                        New Person &uarr;</a></li>
+                                {% endif %}
                             </ul>
                         </div>
                     </div>

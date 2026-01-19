@@ -2,6 +2,13 @@ from app import db
 from datetime import datetime
 from sqlalchemy.dialects.sqlite import JSON
 
+# Association table for rejected matches (Memory)
+rejected_matches = db.Table('rejected_matches',
+    db.Column('face_id', db.Integer, db.ForeignKey('faces.id'), primary_key=True),
+    db.Column('person_id', db.Integer, db.ForeignKey('people.id'), primary_key=True),
+    db.Column('rejected_at', db.DateTime, default=datetime.utcnow)
+)
+
 class Asset(db.Model):
     __tablename__ = 'assets'
     id = db.Column(db.Integer, primary_key=True)
@@ -22,6 +29,9 @@ class Person(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     faces = db.relationship('Face', backref='person', lazy='dynamic')
+    rejected_faces = db.relationship('Face', secondary='rejected_matches', 
+                                   backref=db.backref('rejected_by_people', lazy='dynamic'), 
+                                   lazy='dynamic')
 
 class Face(db.Model):
     __tablename__ = 'faces'

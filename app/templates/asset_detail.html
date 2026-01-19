@@ -1,17 +1,83 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<style>
+    .nav-button {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(0, 0, 0, 0.3);
+        color: rgba(255, 255, 255, 0.5);
+        padding: 15px 10px;
+        border-radius: 5px;
+        text-decoration: none;
+        transition: all 0.2s;
+        z-index: 100;
+        /* Above face boxes */
+        cursor: pointer;
+        border: none;
+    }
+
+    .nav-button:hover {
+        background: rgba(0, 0, 0, 0.7);
+        color: #fff;
+    }
+
+    .nav-left {
+        left: 10px;
+    }
+
+    .nav-right {
+        right: 10px;
+    }
+</style>
 <div class="row mt-4">
     <div class="col-md-8">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">{{ asset.title or asset.file_path }}</h5>
-                <a href="/" class="btn btn-outline-secondary btn-sm">Back to Library</a>
+                <h5 class="mb-0 text-truncate mx-3" style="max-width: 50%;">{{ asset.title or asset.file_path|basename
+                    }}</h5>
+                <div>
+                    <button class="btn btn-outline-warning btn-sm me-2" id="btnAddFaceToggle"
+                        onclick="toggleAddFaceMode()">
+                        <i class="bi bi-bounding-box-circles"></i> Add Missing Face
+                    </button>
+                    <a href="{{ back_url }}" class="btn btn-outline-secondary btn-sm">{{ back_label }}</a>
+                </div>
             </div>
-            <div class="card-body text-center bg-dark">
+            <div class="card-body text-center bg-dark" style="position: relative;">
+                {% if prev_id %}
+                <!-- Swapped: PREV button goes to NEXT_ID (Left arrow -> Older/Forward in ID) -->
+                <a href="{{ url_for('main.asset_detail', asset_id=next_id, sort=current_sort, path_filter=current_filter, view_mode=view_mode, folder_path=folder_path) if next_id else '#' }}"
+                    class="nav-button nav-left {{ 'disabled' if not next_id }}" id="btnPrev"
+                    title="Next Image (Right in Grid)">
+                    <i class="bi bi-caret-left-fill display-5"></i>
+                </a>
+                {% endif %}
+
+                {% if next_id %}
+                <!-- Swapped: NEXT button goes to PREV_ID (Right arrow -> Newer/Back in ID) -->
+                <a href="{{ url_for('main.asset_detail', asset_id=prev_id, sort=current_sort, path_filter=current_filter, view_mode=view_mode, folder_path=folder_path) if prev_id else '#' }}"
+                    class="nav-button nav-right {{ 'disabled' if not prev_id }}" id="btnNext"
+                    title="Previous Image (Left in Grid)">
+                    <i class="bi bi-caret-right-fill display-5"></i>
+                </a>
+                {% endif %}
+
                 {% if asset.media_type in ['jpg', 'jpeg', 'png', 'gif', 'webp'] %}
-                <img src="{{ url_for('main.serve_image', asset_id=asset.id) }}" class="img-fluid"
-                    style="max-height: 600px;">
+                <div style="position: relative; display: inline-block; cursor: default;" id="imageContainer">
+                    <img id="mainImage" src="{{ url_for('main.serve_image', asset_id=asset.id) }}" class="img-fluid"
+                        style="max-height: 600px; -webkit-user-drag: none; user-select: none;">
+
+                    <!-- Face Boxes Overlay -->
+                    <div id="faceOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                    </div>
+
+                    <!-- Drawing Overlay -->
+                    <div id="drawingOverlay"
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; display: none; cursor: crosshair;">
+                    </div>
+                </div>
                 {% else %}
                 <div class="py-5 text-white">
                     <h1>{{ asset.media_type|upper }}</h1>
@@ -23,11 +89,25 @@
     </div>
     <div class="col-md-4">
         <div class="card">
+            <!-- Metadata Column -->
             <div class="card-header">
                 Metadata
             </div>
             <div class="card-body">
                 <dl class="row">
+                    <!-- Face List -->
+                    {% if asset.faces.count() > 0 %}
+                    <dt class="col-sm-12">People</dt>
+                    <dd class="col-sm-12">
+                        {% for face in asset.faces %}
+                        <a href="{{ url_for('main.person_detail', person_id=face.person.id) if face.person else '#' }}"
+                            class="badge {{ 'bg-success' if face.is_confirmed else 'bg-warning text-dark' }} text-decoration-none me-1">
+                            {{ face.person.name if face.person else 'Unknown' }}
+                        </a>
+                        {% endfor %}
+                    </dd>
+                    {% endif %}
+
                     <dt class="col-sm-4">Captured</dt>
                     <dd class="col-sm-8">{{ asset.captured_at or 'Unknown' }}</dd>
 
@@ -47,6 +127,7 @@
                 {% endif %}
                 {% endif %}
 
+                <!-- Info Buttons -->
                 {% if ai_info %}
                 <div class="mt-3">
                     <button type="button" class="btn btn-outline-primary w-100" data-bs-toggle="modal"
@@ -86,7 +167,6 @@
         <div class="card mt-3">
             <div class="card-header">Actions</div>
             <div class="card-body">
-                <!-- Placeholder for future edit/sync actions -->
                 <form method="POST" action="{{ url_for('main.open_folder', asset_id=asset.id) }}">
                     <button type="submit" class="btn btn-outline-info w-100 mb-2">
                         <i class="bi bi-folder-symlink"></i> Show in Folder
@@ -98,6 +178,34 @@
                 <button class="btn btn-secondary w-100" disabled>Edit Metadata (Coming Soon)</button>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- HIDDEN FORMS -->
+<form id="deleteFaceForm" method="POST" style="display: none;"></form>
+
+<!-- Add Face Confirm Modal -->
+<div class="modal fade" id="addFaceConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="{{ url_for('main.add_manual_face', asset_id=asset.id) }}" method="POST">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm New Face</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Add a new face region here?</p>
+                    <input type="hidden" name="top" id="newFaceTop">
+                    <input type="hidden" name="right" id="newFaceRight">
+                    <input type="hidden" name="bottom" id="newFaceBottom">
+                    <input type="hidden" name="left" id="newFaceLeft">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Face</button>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -245,4 +353,273 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Assign Face Modal -->
+<div class="modal fade" id="assignFaceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="{{ url_for('main.assign_face_form') }}" method="POST">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Name this person</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="face_id" id="modalFaceId">
+
+                    <div class="mb-3">
+                        <label class="form-label">Select Existing Person</label>
+                        <select name="person_id" class="form-select">
+                            <option value="">-- Select Person --</option>
+                            {% for p in people %}
+                            <option value="{{ p.id }}">{{ p.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="text-center my-2 text-muted">- OR -</div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Create New Person</label>
+                        <input type="text" name="new_person_name" class="form-control" placeholder="e.g. Uncle Bob">
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <div>
+                        <button type="submit" name="action" value="remove" class="btn btn-outline-warning"
+                            onclick="return confirm('Are you sure you want to unassign this person?');">
+                            <i class="bi bi-person-x"></i> Unassign
+                        </button>
+                        <button type="button" class="btn btn-outline-danger ms-1" onclick="deleteFace()">
+                            <i class="bi bi-trash"></i> Not a Face
+                        </button>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="action" value="save" class="btn btn-primary">Save
+                            Assignment</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    console.log("Asset Detail Script Logic Loaded");
+
+    // --- Global Variables & Functions (Must be accessible to HTML onlick) ---
+    let isAddMode = false;
+    let isDrawing = false;
+    let startX, startY;
+    let selectionBox = null;
+
+    function toggleAddFaceMode() {
+        isAddMode = !isAddMode;
+        const btn = document.getElementById('btnAddFaceToggle');
+        const overlay = document.getElementById('drawingOverlay');
+
+        if (isAddMode) {
+            btn.classList.replace('btn-outline-warning', 'btn-warning');
+            btn.innerHTML = '<i class="bi bi-x-circle"></i> Cancel Add';
+            overlay.style.display = 'block';
+            // Disable overlays to prevent navigation clicks
+            document.querySelectorAll('.nav-overlay').forEach(el => el.style.pointerEvents = 'none');
+        } else {
+            btn.classList.replace('btn-warning', 'btn-outline-warning');
+            btn.innerHTML = '<i class="bi bi-bounding-box-circles"></i> Add Missing Face';
+            overlay.style.display = 'none';
+            if (selectionBox) selectionBox.remove();
+            selectionBox = null;
+            document.querySelectorAll('.nav-overlay').forEach(el => el.style.pointerEvents = 'auto');
+        }
+    }
+
+    function deleteFace() {
+        if (!confirm('Are you sure this is NOT a face? It will be permanently deleted.')) return;
+
+        const faceId = document.getElementById('modalFaceId').value;
+        const form = document.getElementById('deleteFaceForm');
+        form.action = `/face/${faceId}/delete`;
+        form.submit();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log("DOM Content Loaded");
+        const img = document.getElementById('mainImage');
+        const drawingOverlay = document.getElementById('drawingOverlay');
+
+        if (!img) {
+            console.error("Main image not found!");
+            return;
+        }
+
+        // Safe variable assignment
+        const faces = {{ faces_data | tojson
+    }};
+    console.log('Face Data:', faces);
+
+    function drawBoxes() {
+        const overlay = document.getElementById('faceOverlay');
+        overlay.innerHTML = ''; // Clear existing
+
+        const naturalW = img.naturalWidth;
+        const naturalH = img.naturalHeight;
+        const displayW = img.clientWidth;
+        const displayH = img.clientHeight;
+
+        if (naturalW === 0 || displayW === 0) return;
+
+        const scaleX = displayW / naturalW;
+        const scaleY = displayH / naturalH;
+
+        faces.forEach(face => {
+            if (face.top === 0 && face.right === 0) return; // Skip invalid
+
+            const boxTop = face.top * scaleY;
+            const boxLeft = face.left * scaleX;
+            const boxWidth = (face.right - face.left) * scaleX;
+            const boxHeight = (face.bottom - face.top) * scaleY;
+
+            const borderClass = face.is_confirmed ? 'border-success' : 'border-warning';
+
+            const box = document.createElement('div');
+            box.className = `position-absolute border ${borderClass}`;
+            box.style.borderWidth = '2px';
+            box.style.top = `${boxTop}px`;
+            box.style.left = `${boxLeft}px`;
+            box.style.width = `${boxWidth}px`;
+            box.style.height = `${boxHeight}px`;
+            box.style.cursor = 'pointer';
+            box.style.pointerEvents = 'auto'; // CRITICAL: Re-enable clicks
+            box.title = "Click to assign name";
+
+            // Click to open modal
+            box.onclick = function () {
+                document.getElementById('modalFaceId').value = face.id;
+                const modal = new bootstrap.Modal(document.getElementById('assignFaceModal'));
+                modal.show();
+            };
+
+            // Label
+            const label = document.createElement('span');
+            label.className = `position-absolute badge ${face.is_confirmed ? 'bg-success' : 'bg-warning text-dark'}`;
+            label.style.bottom = '100%';
+            label.style.left = '0';
+            label.textContent = face.name;
+            box.appendChild(label);
+
+            overlay.appendChild(box);
+        });
+    }
+
+    // Draw boxes when image loads or window resizes
+    if (img.complete) {
+        drawBoxes();
+    } else {
+        img.onload = drawBoxes;
+    }
+    window.addEventListener('resize', drawBoxes);
+
+    // Keyboard Navigation
+    document.addEventListener('keydown', function (event) {
+        // Ignore if focus is in an input
+        if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
+            return;
+        }
+
+        if (event.key === 'ArrowLeft') {
+            const btn = document.getElementById('btnPrev');
+            if (btn && !btn.disabled) btn.click();
+        } else if (event.key === 'ArrowRight') {
+            const btn = document.getElementById('btnNext');
+            if (btn && !btn.disabled) btn.click();
+        }
+    });
+
+    // --- Drawing Logic Listeners ---
+    drawingOverlay.addEventListener('mousedown', function (e) {
+        isDrawing = true;
+        const rect = drawingOverlay.getBoundingClientRect();
+        startX = e.clientX - rect.left;
+        startY = e.clientY - rect.top;
+
+        if (selectionBox) selectionBox.remove();
+        selectionBox = document.createElement('div');
+        selectionBox.style.border = '2px dashed #0d6efd';
+        selectionBox.style.backgroundColor = 'rgba(13, 110, 253, 0.2)';
+        selectionBox.style.position = 'absolute';
+        selectionBox.style.left = startX + 'px';
+        selectionBox.style.top = startY + 'px';
+        drawingOverlay.appendChild(selectionBox);
+    });
+
+    drawingOverlay.addEventListener('mousemove', function (e) {
+        if (!isDrawing) return;
+        const rect = drawingOverlay.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+
+        const width = Math.abs(currentX - startX);
+        const height = Math.abs(currentY - startY);
+        const left = Math.min(currentX, startX);
+        const top = Math.min(currentY, startY);
+
+        selectionBox.style.width = width + 'px';
+        selectionBox.style.height = height + 'px';
+        selectionBox.style.left = left + 'px';
+        selectionBox.style.top = top + 'px';
+    });
+
+    drawingOverlay.addEventListener('mouseup', function (e) {
+        if (!isDrawing) return;
+        isDrawing = false;
+
+        // Calculate coords relative to natural image size
+        const rect = drawingOverlay.getBoundingClientRect();
+        const finalW = parseInt(selectionBox.style.width);
+        const finalH = parseInt(selectionBox.style.height);
+
+        if (finalW < 10 || finalH < 10) {
+            selectionBox.remove(); // Too small
+            return;
+        }
+
+        const displayW = img.clientWidth;
+        const displayH = img.clientHeight;
+        const naturalW = img.naturalWidth;
+        const naturalH = img.naturalHeight;
+
+        const scaleX = naturalW / displayW;
+        const scaleY = naturalH / displayH;
+
+        const boxLeft = parseInt(selectionBox.style.left);
+        const boxTop = parseInt(selectionBox.style.top);
+
+        // Coords: top, right, bottom, left
+        const paramTop = Math.round(boxTop * scaleY);
+        const paramLeft = Math.round(boxLeft * scaleX);
+        const paramBottom = Math.round((boxTop + finalH) * scaleY);
+        const paramRight = Math.round((boxLeft + finalW) * scaleX);
+
+        document.getElementById('newFaceTop').value = paramTop;
+        document.getElementById('newFaceRight').value = paramRight;
+        document.getElementById('newFaceBottom').value = paramBottom;
+        document.getElementById('newFaceLeft').value = paramLeft;
+
+        // Open Confirm Modal
+        // Use 'bootstrap' from the global namespace if not locally bound, 
+        // or just rely on the script tag loading it into window.bootstrap
+        const myModalEl = document.getElementById('addFaceConfirmModal');
+        if (myModalEl) {
+            const modal = new bootstrap.Modal(myModalEl);
+            modal.show();
+        } else {
+            console.error("Confirm modal element not found!");
+        }
+    });
+    });
+</script>
 {% endblock %}
