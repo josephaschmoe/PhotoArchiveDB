@@ -104,23 +104,23 @@ ArchiveDB tracks files by **Content (Hash)**, not just name.
     4.  It **updates the path** in the database.
     5.  All your tags, faces, and metadata are preserved!
 
+### 5. Face Recognition (Beta)
+The system automatically clusters similar faces. You can refine this:
+ *   **Add Missing Faces**: Draw a box around a face the AI missed. We even attempt to generate a fingerprint for it so it can be matched later!
+ *   **Remove False Positives**: Click "Not a Face" to clean up errors.
+ *   **Tuning**: Adjust sensitivity sliders to control how strict user matching should be.
+
+### 6. Smart Navigation
+ *   **Context Aware**: When you filter by folder or search query, your "Next" and "Previous" buttons respect that list.
+ *   **Keyboard Shortcuts**: Use Left/Right arrow keys to breeze through your gallery.
+
 ---
 
 ## 🔮 Roadmap & Enhancements
 
 We are actively working on making ArchiveDB smarter. Here is what is coming next:
 
-### 🚧 Face Recognition (Beta)
-The backend logic for face detection is powered by `dlib` and `face_recognition`.
-*   **Face Clusters**: Automatically groups similar faces.
-*   **Manual Control**: 
-    *   **Add Missing Faces**: Draw a box around a face the AI missed. We even attempt to generate a fingerprint for it so it can be matched later!
-    *   **Remove False Positives**: Click "Not a Face" to clean up errors.
-    *   **Tuning**: Adjust sensitivity sliders to control how strict user matching should be.
 
-### 🧭 Smart Navigation
-*   **Context Aware**: When you filter by folder or search query, your "Next" and "Previous" buttons respect that list. You won't get lost jumping between unrelated photos.
-*   **Keyboard Shortcuts**: Use Left/Right arrow keys to breeze through your gallery.
 
 ### ✍️ Metadata Write-Back
 Currently, we read metadata perfectly. The next major milestone is **Two-Way Sync**.
