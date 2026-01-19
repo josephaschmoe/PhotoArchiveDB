@@ -61,3 +61,48 @@ Long-running background scans used to lock the database, freezing the UI.
 
 ## 4. Navigation Context
 Navigation (Next/Prev) is context-aware. If you are filtering by "Folder: Summer 2024" or "Person: John", the arrow keys traverse **only suitable candidates**, preserving your mental model of the collection.
+
+---
+
+## 5. Standards & Interoperability
+
+To ensure your work isn't locked into this application, we adhere to industry standards for metadata.
+
+### The Standard: XMP-mwg-rs
+We utilize the **Metadata Working Group (MWG)** region schema for storing face tags. This is the **exact same standard** used by:
+*   **Adobe Lightroom Classic**
+*   **DigiKam**
+*   **Picasa (Legacy)**
+*   **Excire Foto** (via XMP sidecar export)
+
+### Metadata Structure
+When exporting or syncing metadata, we write to the XMP block (embedded or `.xmp` sidecar):
+*   **Namespace**: `http://www.metadataworkinggroup.com/schemas/regions/`
+*   **Prefix**: `mwg-rs`
+*   **Fields**:
+    *   `Type`: "Face"
+    *   `Name`: Person's Name (e.g., "John Doe")
+    *   `Area`: Normalized coordinates (0.0 - 1.0) for `x`, `y`, `w`, `h`.
+
+---
+
+## 6. Import Workflow (Smart Ingestion)
+
+When PhotoArchiveDB scans a new folder, it checks for existing XMP metadata (from Lightroom, Excire, etc.) to **process pre-tagged images intelligently**.
+
+### The Logic: "Trust but Verify"
+If an image has existing `XMP-mwg-rs` face regions:
+
+1.  **Skip Detection**: We do NOT need to run the slow face-detection algorithm to find *where* the faces are. We simply read the existing boxes from the XMP.
+2.  **Forced Encoding**:
+    *   We **MUST** still run the `encoding` pass on those specific crops.
+    *   *Why?* XMP stores the *name* and *box*, but not the biometric vector. To allow this face to be found in *future, untagged* photos, we need to generate its biometric signature.
+3.  **Auto-Assignment**:
+    *   Ideally, we read the `Description` or `Name` field from the XMP region.
+    *   We verify if "Person: John Doe" exists in our DB. If not, we create it.
+    *   We assign the newly encoded face to that Person ID automatically.
+
+### Summary of Benefit
+*   **Speed**: Faster scanning (skipped detection step).
+*   **Continuity**: Your years of tagging in Lightroom/Excire are preserved.
+*   **Training**: Every imported face immediately becomes "training data" for our AI, making it smarter at recognizing those people in new, untagged photos.
