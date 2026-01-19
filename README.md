@@ -1,4 +1,4 @@
-# <img src="app/static/logo.png" width="50" height="50" style="vertical-align: middle; border-radius: 50%;"> PhotoArchiveDB: Your History, De-Siloed.
+# <img src="app/static/logo.png" width="120" height="120" style="vertical-align: middle; border-radius: 50%;"> PhotoArchiveDB: Your History, De-Siloed.
 
 **PhotoArchiveDB** is a robust, self-hosted Digital Asset Management (DAM) system built for archivists and photographers who want full control over their data. It treats your local file system as the source of truth, enriching it with a powerful SQLite database for search, organization, and analysis—without locking your files into a proprietary "black box."
 
