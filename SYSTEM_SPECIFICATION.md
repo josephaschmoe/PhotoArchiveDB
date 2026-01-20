@@ -157,6 +157,7 @@ A deep-inspection view for single items.
 *   **Modals**:
     *   **AI Info**: Shows Stable Diffusion prompt/seed if present.
     *   **Camera Info**: ISO/Shutter/Aperture grid.
+    *   **View on Google Maps**: If GPS coordinates exist, opens the location in a new tab.
     *   **Edit Metadata**: Form for Title/Description/Rating.
 
 ### 6.2 View: Person Detail (`/person/<id>`)
