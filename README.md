@@ -119,7 +119,9 @@ ArchiveDB tracks files by **Content (Hash)**, not just name.
 
 ## 🔮 Roadmap & Enhancements
 
-We are actively working on making ArchiveDB smarter. Here is what is coming next:
+We are actively working on making ArchiveDB smarter. For a detailed breakdown of future plans, including Restoration Tools and Semantic Search, please see our [Strategic Enhancement Roadmap (v5.0)](ROADMAP.md).
+
+Here is a summary of what is coming next:
 
 
 
