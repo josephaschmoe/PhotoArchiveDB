@@ -10,6 +10,7 @@
 *   **GPS Integration**: View photo locations directly on Google Maps.
 *   **Local Face Recognition (Beta)**: Detect and cluster faces privately on your own device.
 *   **Scoped Search**: Context-aware search lets you drill down into specific folders or search the entire library instantly.
+*   **Two-Way Metadata Sync**: Edit titles, captions, and ratings directly in the app. Changes are written back to your original files (Embedded for JPG, Sidecar for RAW) with a "Safety First" automated backup system.
 
 ---
 
@@ -104,11 +105,11 @@ ArchiveDB tracks files by **Content (Hash)**, not just name.
     4.  It **updates the path** in the database.
     5.  All your tags, faces, and metadata are preserved!
 
-### 5. Local Face Intelligence (Beta)
-ArchiveDB includes a privacy-first AI engine that runs entirely on your hardware.
- *   **Automatic clustering**: Group thousands of photos by person without sending data to the cloud.
- *   **Precision Editing**: Manually tag faces the AI missed or remove incorrect matches with a single click.
- *   **Customizable Sensitivity**: Fine-tune the matching algorithm's strictness to handle aging or difficult lighting conditions.
+### 5. Face Recognition Management (Advanced)
+*   **Smart Sorting**: When correcting an "Unknown" face, the "Assign" dropdown scans your entire database, compares facial features, and prioritizes the most likely matches (e.g., "Uncle Bob (94%)").
+*   **Manual Face Addition**: If the AI misses a face, use the "Add Missing Face" button to draw a box around it. The system encodes that region, creating a biometric signature to find that person in *other* photos automatically.
+*   **Recovery Mode**: Faces you reject ("Not this person") are hidden to keep your workspace clean. To see them again, check the **"Include Rejected"** box when running a "Find Matches" scan.
+*   **Customizable Sensitivity**: Fine-tune the matching algorithm's strictness (0.4 - 0.8) to handle aging or difficult lighting conditions.
 
 ### 6. Fluid Navigation
  *   **Context-Preserving**: Whether you are filtering by "Vacation 2023" or "Person: Dad", navigation automatically respects your current view.
@@ -122,10 +123,7 @@ We are actively working on making ArchiveDB smarter. Here is what is coming next
 
 
 
-### ✍️ Metadata Write-Back
-Currently, we read metadata perfectly. The next major milestone is **Two-Way Sync**.
-*   **Goal**: When you rename a person or add a tag in ArchiveDB, we will write that tag back to the original JPG/RAW file (using XMP/IPTC standards).
-*   **Benefit**: Your work is saved in the file forever, even if you stop using ArchiveDB.
+
 
 ### 🗑️ Orphan Cleanup
 Currently, if you delete a file from your disk, the database record remains (but points to a non-existent path).

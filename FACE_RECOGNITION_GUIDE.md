@@ -106,3 +106,28 @@ If an image has existing `XMP-mwg-rs` face regions:
 *   **Speed**: Faster scanning (skipped detection step).
 *   **Continuity**: Your years of tagging in Lightroom/Excire are preserved.
 *   **Training**: Every imported face immediately becomes "training data" for our AI, making it smarter at recognizing those people in new, untagged photos.
+
+---
+
+## 7. Lessons Learned & Edge Cases
+
+Designing this system revealed several critical edge cases that future developers must handle.
+
+### A. The "Rotation" Trap (EXIF Orientation)
+Browser layout engines automatically rotate images based on the EXIF `Orientation` tag (e.g., matching the phone's gyroscope). However, Python image libraries (like `PIL` or `dlib`) **do not** rotate by default; they read the raw pixels.
+*   **The Issue**: If a user draws a box on the "visual" top-left of a rotated image, the backend receives those coordinates. If the backend processes the *raw* image, coordinates map to the wrong pixels (e.g., empty wall instead of a face).
+*   **The Fix**: ALL backend image processing (cropping, encoding) **MUST** perform an explicit "EXIF Transpose" (`ImageOps.exif_transpose`) before applying any coordinate logic. This ensures the backend sees exactly what the user sees.
+
+### B. The "Safety" Paradox (Hidden Matches)
+To improve UX, we filter out faces the user previously rejected (`rejected_matches` table).
+*   **The Issue**: If a user rejects a face (even accidentally) when the AI is 60% confident, the system "hides" that face forever to avoid annoyance. Later, if the user tries to find that face with a better tool, it remains hidden, causing confusion ("I know it's there, why can't I search for it?").
+*   **The Fix**: Search tools must include a **"Include Rejected" / "Force Recheck"** bypass option to allow users to audit and recover false negatives.
+
+### C. Smart Sorting Logic
+When suggesting faces for an "Unknown" slot, alphabetical order is inefficient.
+*   **The Solution**: We implemented a **Biometric Ranker**.
+    *   Calculate Euclidean distance between the unknown face and all known people.
+    *   Convert distance to a Score (0-100).
+    *   **Rank 1**: Biometric matches > 60% (shown with ⭐).
+    *   **Rank 2**: Alphabetical list of everyone else.
+    This turns a scroll-heavy search into a 1-click confirmation for 90% of cases.

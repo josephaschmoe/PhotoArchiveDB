@@ -1,0 +1,18 @@
+{
+  "SourceFile": "test_writer_assets/test.jpg",
+  "ExifTool:ExifToolVersion": 12.69,
+  "System:FileName": "test.jpg",
+  "System:Directory": "test_writer_assets",
+  "System:FileSize": "15 bytes",
+  "System:FileModifyDate": "2026:01:19 20:14:05-05:00",
+  "System:FileAccessDate": "2026:01:19 20:14:05-05:00",
+  "System:FileCreateDate": "2026:01:19 20:14:05-05:00",
+  "System:FilePermissions": "-rw-rw-rw-",
+  "File:FileType": "TXT",
+  "File:FileTypeExtension": "txt",
+  "File:MIMEType": "text/plain",
+  "File:MIMEEncoding": "us-ascii",
+  "File:Newlines": "(none)",
+  "File:LineCount": 1,
+  "File:WordCount": 3
+}

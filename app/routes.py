@@ -1,5 +1,4 @@
-from flask import Blueprint, render_template, current_app, flash, redirect, url_for, send_file
-from flask import Blueprint, render_template, current_app, flash, redirect, url_for, send_file, request
+from flask import Blueprint, render_template, current_app, flash, redirect, url_for, send_file, request, jsonify
 import subprocess
 import os
 from app.models import Asset, Person, Face
@@ -8,7 +7,8 @@ from datetime import datetime
 from app.services.scanner import scan_directory
 from app.models import Asset, Person, Face, LibraryPath
 from app.services.vision import process_all_faces, scan_unknowns_for_match
-from app.services.metadata import write_metadata, extract_ai_info, extract_camera_info, extract_gps_info, get_metadata
+from app.services.metadata import extract_ai_info, extract_camera_info, extract_gps_info, get_metadata
+from app.services import metadata_writer, metadata_backup
 from app.utils import generate_thumbnail
 
 main = Blueprint('main', __name__)
@@ -290,7 +290,7 @@ def serve_thumbnail(asset_id):
         face = Face.query.get(face_id)
         if face and face.location:
             try:
-                from PIL import Image
+                from PIL import Image, ImageOps
                 import io
                 
                 # Verify calling PIL for every request might be slow, 
@@ -307,6 +307,9 @@ def serve_thumbnail(asset_id):
                 pad_w = int(w * 0.2)
                 
                 with Image.open(asset.file_path) as img:
+                    # Fix Orientation (Crucial for crops to match manual boxes)
+                    img = ImageOps.exif_transpose(img)
+                    
                     width, height = img.size
                     
                     # Safe crop coords
@@ -510,6 +513,187 @@ def refresh_metadata(asset_id):
         
     return redirect(url_for('main.asset_detail', asset_id=asset_id))
 
+@main.route('/asset/<int:asset_id>/update_metadata', methods=['POST'])
+def update_metadata(asset_id):
+    asset = Asset.query.get_or_404(asset_id)
+    
+    # Get form data
+    title = request.form.get('title', '').strip()
+    description = request.form.get('description', '').strip()
+    rating_str = request.form.get('rating', '0')
+    
+    try:
+        rating = int(rating_str)
+    except ValueError:
+        rating = 0
+        
+    # keywords = request.form.get('keywords') # Future: Split by comma
+    
+    # 1. Update DB (Asset properties)
+    # We only have title on Asset model currently. 
+    # Description and Rating are usually just in meta_json, but if we had columns we'd update them.
+    # Let's assume we strictly use meta_json for Description/Rating for now, 
+    # but Title is a first-class column.
+    
+    if title:
+        asset.title = title
+        
+    # 2. Update meta_json (Merge)
+    # We need to load existing, update keys, and save back.
+    current_meta = dict(asset.meta_json) if asset.meta_json else {}
+    
+    # Update standard keys we support
+    current_meta['title'] = title
+    current_meta['description'] = description
+    current_meta['rating'] = rating
+    
+    # Also update specific XMP keys if we want the DB JSON to look like ExifTool output immediately?
+    # Or we just store our "clean" keys? 
+    # The DB meta_json is usually raw ExifTool output. 
+    # Mixing our clean keys (lowercase) with ExifTool keys (CamelCase) is messy but functional.
+    # Let's try to map to ExifTool keys for consistency if possible, OR just rely on refresh to fix it later.
+    # Better: Update the *clean* keys that our UI uses, and let 'write_metadata' handle the mapping to file.
+    # When we re-scan, the file's authoritative XMP will overwrite this anyway.
+    
+    asset.meta_json = current_meta
+    db.session.commit()
+    
+    # 3. Trigger Write to File (Resulting in Backup + Write)
+    # We pass the clean mapped dict
+    write_data = {
+        'title': title,
+        'description': description,
+        'rating': rating
+    }
+    
+    if metadata_writer.write_metadata(asset.file_path, write_data):
+        flash("Metadata saved and written to file (Backup created).", "success")
+        
+        # Optional: Re-read immediately to get the 'official' ExifTool JSON structure back?
+        # This prevents drift between our 'clean keys' and the 'raw keys'.
+        # But it adds latency. Let's do it for correctness.
+        from app.services.metadata import get_metadata
+        new_official_meta = get_metadata(asset.file_path)
+        if new_official_meta:
+            asset.meta_json = new_official_meta
+            db.session.commit()
+            
+    else:
+        flash("Saved to Database, but FAILED to write to file. Check logs.", "warning")
+        
+    return redirect(url_for('main.asset_detail', asset_id=asset_id))
+
+    return redirect(url_for('main.asset_detail', asset_id=asset_id))
+
+@main.route('/asset/<int:asset_id>/history', methods=['GET'])
+def get_asset_history(asset_id):
+    """API to get backup list for an asset"""
+    asset = Asset.query.get_or_404(asset_id)
+    backups = metadata_backup.get_backup_info(asset.file_path)
+    return {'backups': backups} # Flask auto-jsonify
+
+@main.route('/asset/<int:asset_id>/restore', methods=['POST'])
+def restore_backup(asset_id):
+    """Restores metadata from a specific backup file."""
+    asset = Asset.query.get_or_404(asset_id)
+    backup_path = request.form.get('backup_path')
+    
+    if not backup_path or not os.path.exists(backup_path):
+        flash("Invalid backup path.", "danger")
+        return redirect(url_for('main.asset_detail', asset_id=asset_id))
+        
+    # 1. Read Backup
+    data = metadata_backup.read_backup(backup_path)
+    if not data:
+        flash("Failed to read backup file.", "danger")
+        return redirect(url_for('main.asset_detail', asset_id=asset_id))
+        
+    # 2. Extract Clean Metadata for Write
+    # The backup is raw ExifTool JSON (one dict).
+    # We need to extract the keys our writer understands:
+    # 'title', 'description', 'rating', 'keywords'
+    # Or 'XMP-dc:Title', etc.
+    
+    # Ideally, we map specific keys.
+    # ExifTool JSON keys are often CamelCase or Group:Tag.
+    
+    # Let's clean it up to standard keys for our writer
+    # Note: 'Title' might be in 'XMP:Title', 'IPTC:ObjectName', 'Title', etc.
+    # We prioritize specific XMP/IPTC tags found in the backup.
+    
+    restore_data = {}
+    
+    # Helper to find tag in dict (case insensitive helper not needed if we check known keys)
+    # Common keys ExifTool outputs:
+    # 'Title', 'Description', 'Rating', 'Subject', 'Keywords'
+    
+    # Helper to find tag in dict with various prefixes
+    def find_val(keys):
+        for k in keys:
+            if k in data: return data[k]
+        return None
+
+    # Title
+    t_val = find_val(['Title', 'XMP-dc:Title', 'XMP:Title', 'IPTC:ObjectName', 'ObjectName'])
+    if t_val: restore_data['title'] = t_val
+    
+    # Description/Caption
+    d_val = find_val(['Description', 'XMP-dc:Description', 'XMP:Description', 
+                      'IPTC:Caption-Abstract', 'Caption-Abstract', 'IFD0:ImageDescription', 'ImageDescription'])
+    if d_val: restore_data['description'] = d_val
+    
+    # Rating
+    r_val = find_val(['Rating', 'XMP:Rating', 'XMP-xmp:Rating'])
+    if r_val is not None: restore_data['rating'] = int(r_val)
+    
+    # Keywords
+    # Merge Subject and Keywords?
+    tags = []
+    
+    # Check for Subject (XMP)
+    s_val = find_val(['Subject', 'XMP-dc:Subject', 'XMP:Subject'])
+    if s_val:
+        if isinstance(s_val, list): tags.extend(s_val)
+        else: tags.append(s_val)
+
+    # Check for Keywords (IPTC)
+    k_val = find_val(['Keywords', 'IPTC:Keywords'])
+    if k_val:
+        if isinstance(k_val, list): tags.extend(k_val)
+        else: tags.append(k_val)
+        
+    if tags:
+        restore_data['keywords'] = list(set(tags)) # dedup
+        
+    # 3. Write to File (Trigger Safe Write)
+    if metadata_writer.write_metadata(asset.file_path, restore_data):
+        flash(f"Restored metadata from backup {os.path.basename(backup_path)}.", "success")
+        
+        # 4. Update DB from File Source of Truth
+        # We re-read the file to ensure the DB matches exactly what ExifTool sees (and what the UI expects keys-wise)
+        fresh_meta = get_metadata(asset.file_path)
+        if fresh_meta:
+            asset.meta_json = fresh_meta
+            
+            # Also update columns if needed
+            # (Reader usually puts Title in 'Title' or 'XMP:Title')
+            # But we can also look at restored_data for the Title column source
+            if 'title' in restore_data:
+                 asset.title = restore_data['title']
+        else:
+            # Fallback if read fails (unlikely)
+            print("Warning: Failed to re-read metadata after restore.")
+            current = dict(asset.meta_json) if asset.meta_json else {}
+            current.update(restore_data)
+            asset.meta_json = current
+            
+        db.session.commit()
+    else:
+        flash("Failed to write restored metadata to file.", "danger")
+        
+    return redirect(url_for('main.asset_detail', asset_id=asset_id))
+
+
 @main.route('/asset/<int:asset_id>/open_folder', methods=['POST'])
 def open_folder(asset_id):
     asset = Asset.query.get_or_404(asset_id)
@@ -581,7 +765,8 @@ def assign_face(face_id, person_id):
 def person_detail(person_id):
     person = Person.query.get_or_404(person_id)
     confirmed_faces = Face.query.filter_by(person_id=person.id, is_confirmed=True).all()
-    suggested_faces = Face.query.filter_by(person_id=person.id, is_confirmed=False).all()
+    # Sort suggested faces by confidence (Highest first)
+    suggested_faces = Face.query.filter_by(person_id=person.id, is_confirmed=False).order_by(Face.confidence.desc()).all()
     
     # Fetch all people for the reassignment modal
     people = Person.query.order_by(Person.name).all()
@@ -627,9 +812,18 @@ def remove_face(face_id):
 @main.route('/person/<int:person_id>/find_matches', methods=['POST'])
 def find_matches(person_id):
     try:
-        count = scan_unknowns_for_match(person_id)
+        # Parse Options
+        tolerance = float(request.form.get('tolerance', 0.6))
+        include_rejected = 'include_rejected' in request.form
+        
+        count = scan_unknowns_for_match(person_id, tolerance=tolerance, include_rejected=include_rejected)
+        
+        msg = f"Found {count} new potential matches!"
+        if include_rejected:
+            msg += " (Included previously rejected faces)"
+            
         if count > 0:
-            flash(f"Found {count} new potential matches!", "success")
+            flash(msg, "success")
         else:
             flash("No new matches found in unknown faces.", "info")
     except Exception as e:
@@ -717,6 +911,73 @@ def assign_face_form():
         flash("No person selected or created.", "warning")
         
     return redirect(url_for('main.asset_detail', asset_id=face.asset_id))
+
+
+@main.route('/person/<int:source_person_id>/merge_into', methods=['POST'])
+def merge_into_person(source_person_id):
+    source_person = Person.query.get_or_404(source_person_id)
+    target_name = request.form.get('target_person_name')
+    
+    if not target_name:
+        flash("Please provide a target person name.", "warning")
+        return redirect(url_for('main.person_detail', person_id=source_person_id))
+        
+    target_person = Person.query.filter_by(name=target_name.strip()).first()
+    
+    if not target_person:
+        flash(f"Person '{target_name}' not found.", "danger")
+        return redirect(url_for('main.person_detail', person_id=source_person_id))
+        
+    if target_person.id == source_person.id:
+        flash("Cannot merge a person into themselves.", "warning")
+        return redirect(url_for('main.person_detail', person_id=source_person_id))
+        
+    # Perform Merge
+    fn_count = Face.query.filter_by(person_id=source_person.id).update({
+        'person_id': target_person.id,
+        'is_confirmed': True 
+    })
+    
+    db.session.delete(source_person)
+    db.session.commit()
+    
+    flash(f"Merged '{source_person.name}' into '{target_person.name}'. {fn_count} faces moved.", "success")
+    return redirect(url_for('main.person_detail', person_id=target_person.id))
+
+
+    return redirect(url_for('main.person_detail', person_id=target_person.id))
+
+
+@main.route('/face/<int:face_id>/matches')
+def get_face_matches(face_id):
+    """
+    API to get potential matches for a face, sorted by similarity.
+    Returns JSON: [{id, name, score}, ...]
+    Score is 0-100 match confidence (inverted distance).
+    """
+    try:
+        from app.services.vision import find_best_matches_for_face
+        matches = find_best_matches_for_face(face_id)
+        
+        data = []
+        for person, dist in matches:
+            # Convert dist to score
+            # Distance 0.0 = 100%
+            # Distance 0.6 = Threshold
+            # Distance 1.0 = 0%
+            match_score = max(0, min(100, int((1.0 - dist) * 100)))
+            
+            data.append({
+                'id': person.id,
+                'name': person.name,
+                'score': match_score,
+                'is_suggested': bool(dist < 0.6) # Flag for UI highlighting
+            })
+            
+        return jsonify(data)
+    except Exception as e:
+        print(f"Match API Error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @main.route('/sync')

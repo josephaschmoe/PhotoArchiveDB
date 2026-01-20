@@ -29,7 +29,7 @@ def get_metadata(file_path):
         # Let's try to just use default first but maybe the user's files have them in a way standard scan missed?
         # Or maybe I need to specifically ask for them? No, exiftool usually dumps all.
         # I'll update command to include -struct to get structural XMP if needed, and -a.
-        cmd = [EXIFTOOL_PATH, '-j', '-a', file_path]
+        cmd = [EXIFTOOL_PATH, '-j', '-a', '-struct', file_path]
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         
         if result.returncode != 0:
@@ -256,3 +256,66 @@ def extract_gps_info(metadata):
         print(f"GPS Parse Error: {e}")
         
     return None
+
+def extract_face_regions(metadata):
+    """
+    Parses XMP-mwg-rs:RegionInfo to extract face regions.
+    Returns list of dicts:
+    [{
+        'name': str,
+        'type': str, # 'Face'
+        'area': { 'x': float, 'y': float, 'w': float, 'h': float, 'unit': 'normalized' }
+    }]
+    """
+    if not metadata:
+        return []
+
+    # ExifTool Structure for RegionInfo:
+    # It might be in 'XMP-mwg-rs:RegionInfo' or 'RegionInfo'
+    # It is usually a Dict with 'RegionList', which is a List of Dicts.
+    
+    region_info = metadata.get('RegionInfo') or metadata.get('XMP-mwg-rs:RegionInfo')
+    
+    if not region_info or not isinstance(region_info, dict):
+        return []
+        
+    region_list = region_info.get('RegionList')
+    if not region_list:
+        return []
+        
+    # Ensure list (might be single dict if only 1 region and ExifTool didn't listify)
+    if isinstance(region_list, dict):
+        region_list = [region_list]
+        
+    faces = []
+    
+    for region in region_list:
+        try:
+            r_type = region.get('Type')
+            if r_type != 'Face':
+                continue
+                
+            name = region.get('Name')
+            area = region.get('Area')
+            
+            if not name or not area:
+                continue
+                
+            # Area usually: {'H': 0.1, 'W': 0.1, 'X': 0.5, 'Y': 0.5, 'Unit': 'normalized'}
+            # MWG refs are Center X/Y usually?
+            # ExifTool -struct output mirrors the XMP structure.
+            # MWG-rs: Area struct contains x, y, w, h, unit.
+            # X/Y are CENTER coordinates? Or Top-Left?
+            # MWG Spec: "x", "y" are center coordinates. "w", "h" are width/height.
+            
+            faces.append({
+                'name': name,
+                'type': r_type,
+                'area': area
+            })
+            
+        except Exception as e:
+            print(f"Error parsing region: {e}")
+            continue
+            
+    return faces

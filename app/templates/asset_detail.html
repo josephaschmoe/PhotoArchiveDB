@@ -91,75 +91,129 @@
         <div class="card">
             <!-- Metadata Column -->
             <div class="card-header">
-                Metadata
+                <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#metadata-tab"
+                            type="button">Current</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-tab" type="button"
+                            onclick="loadHistory()">History (Backups)</button>
+                    </li>
+                </ul>
             </div>
-            <div class="card-body">
-                <dl class="row">
-                    <!-- Face List -->
-                    {% if asset.faces.count() > 0 %}
-                    <dt class="col-sm-12">People</dt>
-                    <dd class="col-sm-12">
-                        {% for face in asset.faces %}
-                        <a href="{{ url_for('main.person_detail', person_id=face.person.id) if face.person else '#' }}"
-                            class="badge {{ 'bg-success' if face.is_confirmed else 'bg-warning text-dark' }} text-decoration-none me-1">
-                            {{ face.person.name if face.person else 'Unknown' }}
-                        </a>
-                        {% endfor %}
-                    </dd>
+            <div class="card-body tab-content">
+                <!-- Metadata Tab -->
+                <div class="tab-pane fade show active" id="metadata-tab" role="tabpanel">
+                    <dl class="row">
+                        <!-- Face List -->
+                        {% if asset.faces.count() > 0 %}
+                        <dt class="col-sm-12">People</dt>
+                        <dd class="col-sm-12">
+                            {% for face in asset.faces %}
+                            <a href="{{ url_for('main.person_detail', person_id=face.person.id) if face.person else '#' }}"
+                                class="badge {{ 'bg-success' if face.is_confirmed else 'bg-warning text-dark' }} text-decoration-none me-1">
+                                {{ face.person.name if face.person else 'Unknown' }}
+                            </a>
+                            {% endfor %}
+                        </dd>
+                        {% endif %}
+
+                        <dt class="col-sm-4">Captured</dt>
+                        <dd class="col-sm-8">{{ asset.captured_at or 'Unknown' }}</dd>
+
+                        <dt class="col-sm-4">Added</dt>
+                        <dd class="col-sm-8">{{ asset.added_at }}</dd>
+
+                        <dt class="col-sm-4">Type</dt>
+                        <dd class="col-sm-8">{{ asset.media_type }}</dd>
+                    </dl>
+
+                    {% if asset.meta_json %}
+                    {% if asset.meta_json.get('Description') or asset.meta_json.get('Caption-Abstract') %}
+                    <div class="alert alert-info mt-3">
+                        <strong>Description:</strong>
+                        {{ asset.meta_json.get('Description') or asset.meta_json.get('Caption-Abstract') }}
+                    </div>
+                    {% endif %}
                     {% endif %}
 
-                    <dt class="col-sm-4">Captured</dt>
-                    <dd class="col-sm-8">{{ asset.captured_at or 'Unknown' }}</dd>
+                    {% set raw_rating = asset.meta_json.get('Rating') or asset.meta_json.get('rating') or
+                    asset.meta_json.get('XMP:Rating') or 0 %}
+                    {% set rating = raw_rating|int %}
+                    {% if rating > 0 %}
+                    <div class="mt-2 mb-3">
+                        <strong>Rating:</strong>
+                        <span class="text-warning" style="font-size: 1.2rem;">
+                            {% for i in range(1, 6) %}
+                            <i class="bi {{ 'bi-star-fill' if i <= rating else 'bi-star' }}"></i>
+                            {% endfor %}
+                        </span>
+                        <span class="text-muted small">({{ rating }})</span>
+                    </div>
+                    {% endif %}
 
-                    <dt class="col-sm-4">Added</dt>
-                    <dd class="col-sm-8">{{ asset.added_at }}</dd>
 
-                    <dt class="col-sm-4">Type</dt>
-                    <dd class="col-sm-8">{{ asset.media_type }}</dd>
-                </dl>
 
-                {% if asset.meta_json %}
-                {% if asset.meta_json.get('Description') or asset.meta_json.get('Caption-Abstract') %}
-                <div class="alert alert-info mt-3">
-                    <strong>Description:</strong>
-                    {{ asset.meta_json.get('Description') or asset.meta_json.get('Caption-Abstract') }}
+                    <!-- Info Buttons -->
+                    {% if ai_info %}
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-outline-primary w-100" data-bs-toggle="modal"
+                            data-bs-target="#aiInfoModal">
+                            ✨ View AI Generation Details
+                        </button>
+                    </div>
+                    {% endif %}
+
+                    {% if camera_info %}
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-outline-secondary w-100" data-bs-toggle="modal"
+                            data-bs-target="#cameraInfoModal">
+                            📷 View Camera Details
+                        </button>
+                    </div>
+                    {% endif %}
+
+                    {% if gps_info %}
+                    <div class="mt-3">
+                        <a href="https://www.google.com/maps/search/?api=1&query={{ gps_info.lat }},{{ gps_info.lng }}"
+                            target="_blank" class="btn btn-outline-success w-100">
+                            📍 View on Google Maps
+                        </a>
+                    </div>
+                    {% endif %}
+
+                    <hr>
+                    <h6>Raw Metadata (JSON)</h6>
+                    <div
+                        style="max-height: 400px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;">
+                        <pre class="small mb-0"><code>{{ asset.meta_json | tojson(indent=2) }}</code></pre>
+                    </div>
                 </div>
-                {% endif %}
-                {% endif %}
+            </div> <!-- End Function of Metadata Tab -->
 
-                <!-- Info Buttons -->
-                {% if ai_info %}
-                <div class="mt-3">
-                    <button type="button" class="btn btn-outline-primary w-100" data-bs-toggle="modal"
-                        data-bs-target="#aiInfoModal">
-                        ✨ View AI Generation Details
-                    </button>
+            <!-- History Tab -->
+            <div class="tab-pane fade" id="history-tab" role="tabpanel">
+                <div id="historyLoading" class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="small text-muted mt-2">Finding backups...</p>
                 </div>
-                {% endif %}
-
-                {% if camera_info %}
-                <div class="mt-3">
-                    <button type="button" class="btn btn-outline-secondary w-100" data-bs-toggle="modal"
-                        data-bs-target="#cameraInfoModal">
-                        📷 View Camera Details
-                    </button>
+                <div id="historyContent" style="display: none;">
+                    <table class="table table-sm table-hover small">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <!-- JS Populated -->
+                        </tbody>
+                    </table>
                 </div>
-                {% endif %}
-
-                {% if gps_info %}
-                <div class="mt-3">
-                    <a href="https://www.google.com/maps/search/?api=1&query={{ gps_info.lat }},{{ gps_info.lng }}"
-                        target="_blank" class="btn btn-outline-success w-100">
-                        📍 View on Google Maps
-                    </a>
-                </div>
-                {% endif %}
-
-                <hr>
-                <h6>Raw Metadata (JSON)</h6>
-                <div
-                    style="max-height: 400px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;">
-                    <pre class="small mb-0"><code>{{ asset.meta_json | tojson(indent=2) }}</code></pre>
+                <div id="historyEmpty" class="text-center text-muted py-3" style="display: none;">
+                    <i class="bi bi-clock-history display-6"></i>
+                    <p>No backups found.</p>
                 </div>
             </div>
         </div>
@@ -175,7 +229,9 @@
                 <a href="{{ url_for('main.refresh_metadata', asset_id=asset.id) }}" class="btn btn-warning w-100 mb-2">
                     <i class="bi bi-arrow-clockwise"></i> Refresh Metadata
                 </a>
-                <button class="btn btn-secondary w-100" disabled>Edit Metadata (Coming Soon)</button>
+                <button class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#editMetadataModal">
+                    <i class="bi bi-pencil-square"></i> Edit Metadata
+                </button>
             </div>
         </div>
     </div>
@@ -404,11 +460,116 @@
     </div>
 </div>
 
+<!-- Edit Metadata Modal -->
+<div class="modal fade" id="editMetadataModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form action="{{ url_for('main.update_metadata', asset_id=asset.id) }}" method="POST">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Metadata</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Title -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Title</label>
+                        <input type="text" name="title" class="form-control"
+                            value="{{ asset.title or asset.meta_json.get('title') or '' }}">
+                    </div>
+
+                    <!-- Description / Caption -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Description / Caption</label>
+                        <textarea name="description" class="form-control" rows="4">{{ 
+                            asset.meta_json.get('description') or 
+                            asset.meta_json.get('Description') or 
+                            asset.meta_json.get('Caption-Abstract') or '' 
+                        }}</textarea>
+                    </div>
+
+                    <!-- Rating (Interactive) -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Rating</label>
+                        {% set current_rating = asset.meta_json.get('rating')|int if asset.meta_json.get('rating') else
+                        0 %}
+                        <input type="hidden" name="rating" id="ratingInput" value="{{ current_rating }}">
+
+                        <div class="user-select-none" style="font-size: 1.5rem; cursor: pointer;">
+                            <i class="bi bi-star" id="star1" onclick="setRating(1)"></i>
+                            <i class="bi bi-star" id="star2" onclick="setRating(2)"></i>
+                            <i class="bi bi-star" id="star3" onclick="setRating(3)"></i>
+                            <i class="bi bi-star" id="star4" onclick="setRating(4)"></i>
+                            <i class="bi bi-star" id="star5" onclick="setRating(5)"></i>
+                            <span class="ms-2 text-muted small" id="ratingLabel" style="font-size: 0.9rem;">
+                                {% if current_rating > 0 %}{{ current_rating }} Star{% if current_rating > 1 %}s{% endif
+                                %}{% else %}No Rating{% endif %}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle"></i> Saving will update the database AND write directly to the file
+                        (safely).
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
     console.log("Asset Detail Script Logic Loaded");
+
+
+    // --- Star Rating Logic ---
+    function setRating(val) {
+        const input = document.getElementById('ratingInput');
+        let current = parseInt(input.value || 0);
+
+        // Toggle off if clicking same value
+        if (current === val) {
+            current = 0;
+        } else {
+            current = val;
+        }
+
+        input.value = current;
+        updateStarVisuals(current);
+    }
+
+    function updateStarVisuals(val) {
+        const label = document.getElementById('ratingLabel');
+        if (val === 0) {
+            label.textContent = "No Rating";
+        } else {
+            label.textContent = val + " Star" + (val > 1 ? "s" : "");
+        }
+
+        for (let i = 1; i <= 5; i++) {
+            const star = document.getElementById('star' + i);
+            if (i <= val) {
+                star.classList.replace('bi-star', 'bi-star-fill');
+                star.classList.add('text-warning');
+            } else {
+                star.classList.replace('bi-star-fill', 'bi-star');
+                star.classList.remove('text-warning');
+            }
+        }
+    }
+
+    // Init Stars on Load
+    document.addEventListener('DOMContentLoaded', function () {
+        // ... existing load ...
+        const initialRating = parseInt(document.getElementById('ratingInput').value || 0);
+        updateStarVisuals(initialRating);
+    });
 
     // --- Global Variables & Functions (Must be accessible to HTML onlick) ---
     let isAddMode = false;
@@ -461,6 +622,43 @@
     }};
     console.log('Face Data:', faces);
 
+    function openAssignModal(faceId) {
+        document.getElementById('modalFaceId').value = faceId;
+        const modal = new bootstrap.Modal(document.getElementById('assignFaceModal'));
+
+        // --- Smart Sort Logic ---
+        const select = document.querySelector('#assignFaceModal select[name="person_id"]');
+        select.innerHTML = '<option>Loading matches...</option>';
+        modal.show();
+
+        fetch(`/face/${faceId}/matches`)
+            .then(res => res.json())
+            .then(data => {
+                select.innerHTML = '<option value="">-- Select Person --</option>';
+
+                let hasSuggestions = false;
+                data.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    if (p.is_suggested) {
+                        hasSuggestions = true;
+                        opt.text = `⭐ ${p.name} (${p.score}% Match)`;
+                        opt.style.fontWeight = 'bold';
+                        opt.style.color = '#198754';
+                    } else {
+                        opt.text = p.name;
+                    }
+                    select.appendChild(opt);
+                });
+
+                if (hasSuggestions) select.scrollTop = 0;
+            })
+            .catch(err => {
+                console.error("Error loading matches", err);
+                select.innerHTML = '<option value="">Error loading people</option>';
+            });
+    }
+
     function drawBoxes() {
         const overlay = document.getElementById('faceOverlay');
         overlay.innerHTML = ''; // Clear existing
@@ -498,9 +696,7 @@
 
             // Click to open modal
             box.onclick = function () {
-                document.getElementById('modalFaceId').value = face.id;
-                const modal = new bootstrap.Modal(document.getElementById('assignFaceModal'));
-                modal.show();
+                openAssignModal(face.id);
             };
 
             // Label
@@ -621,5 +817,74 @@
         }
     });
     });
+    // --- History Logic ---
+    let historyLoaded = false;
+    function loadHistory() {
+        if (historyLoaded) return;
+
+        fetch(`/asset/{{ asset.id }}/history`)
+            .then(r => r.json())
+            .then(data => {
+                const backups = data.backups;
+                const tbody = document.getElementById('historyTableBody');
+                tbody.innerHTML = '';
+
+                document.getElementById('historyLoading').style.display = 'none';
+
+                if (backups.length === 0) {
+                    document.getElementById('historyEmpty').style.display = 'block';
+                    return;
+                }
+
+                document.getElementById('historyContent').style.display = 'block';
+
+                backups.forEach(b => {
+                    const row = document.createElement('tr');
+
+                    // Date Column
+                    const dateCol = document.createElement('td');
+                    dateCol.textContent = b.pretty_time;
+                    row.appendChild(dateCol);
+
+                    // Action Column
+                    const actionCol = document.createElement('td');
+
+                    const btn = document.createElement('button');
+                    btn.className = 'btn btn-sm btn-outline-danger';
+                    btn.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i> Restore';
+                    btn.title = "Restore this version";
+                    btn.onclick = () => confirmRestore(b.path, b.pretty_time);
+
+                    actionCol.appendChild(btn);
+                    row.appendChild(actionCol);
+
+                    tbody.appendChild(row);
+                });
+
+                historyLoaded = true; // prevent re-fetch
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById('historyLoading').innerHTML = '<p class="text-danger">Error loading history.</p>';
+            });
+    }
+
+    function confirmRestore(path, time) {
+        if (!confirm(`Are you sure you want to restore metadata from ${time}?\n\nThis will overwrite current tags. A new backup will be created safely.`)) return;
+
+        // Post form
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/asset/{{ asset.id }}/restore`;
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'backup_path';
+        input.value = path;
+
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+    }
 </script>
 {% endblock %}

@@ -86,6 +86,15 @@ def process_all_faces():
                 db.session.add(new_face)
             
             db.session.commit()
+            
+            # Step 2: Merge with Metadata (XMP-mwg-rs) logic
+            # This ensures we pick up any existing names from the file tags
+            try:
+                from app.services import face_import_utils
+                face_import_utils.import_faces_from_metadata(asset)
+            except Exception as e:
+                print(f"Metadata import warning for {asset.id}: {e}")
+
             count += 1
             
         except Exception as e:
@@ -93,7 +102,7 @@ def process_all_faces():
 
     return count
 
-def scan_unknowns_for_match(person_id, tolerance=0.6):
+def scan_unknowns_for_match(person_id, tolerance=0.6, include_rejected=False):
     """
     Scans all unknown faces and checks if they match the given person.
     Returns number of new suggestions found.
@@ -129,7 +138,9 @@ def scan_unknowns_for_match(person_id, tolerance=0.6):
     # query faces that are NOT confirmed (is_confirmed is False)
     # This allows stealing matches that were incorrectly suggested for someone else
     query = Face.query.filter(Face.is_confirmed == False)
-    if rejected_ids:
+    
+    if rejected_ids and not include_rejected:
+        # Only exclude rejected faces if we are NOT including them
         query = query.filter(Face.id.notin_(rejected_ids))
         
     unknown_faces = query.all()
@@ -170,7 +181,15 @@ def encode_face_region(file_path, top, right, bottom, left):
         return None
         
     try:
-        image = face_recognition.load_image_file(file_path)
+        # Load with PIL to handle EXIF orientation
+        from PIL import Image, ImageOps
+        import numpy as np
+        
+        with Image.open(file_path) as img:
+            img = ImageOps.exif_transpose(img)
+            img = img.convert('RGB')
+            image = np.array(img)
+            
         locations = [(top, right, bottom, left)]
         
         # 'num_jitters' can be increased for better accuracy on re-sampling
@@ -183,3 +202,78 @@ def encode_face_region(file_path, top, right, bottom, left):
         print(f"Error encoding manual region for {file_path}: {e}")
         
     return None
+
+def find_best_matches_for_face(face_id):
+    """
+    Returns a list of (Person, min_distance) tuples, sorted by distance (ASC).
+    Used to populate the 'Assign Face' dropdown with likely candidates.
+    """
+    target_face = Face.query.get(face_id)
+    if not target_face or not target_face.encoding:
+        return []
+        
+    try:
+        target_encoding = pickle.loads(target_face.encoding)
+    except:
+        return []
+        
+    # Get all confirmed faces that have a person assigned
+    # Optimization: This could be cached or pre-calculated in a real production app.
+    known_faces = Face.query.filter(Face.is_confirmed == True, Face.person_id.isnot(None)).all()
+    
+    if not known_faces:
+        return []
+        
+    # Prepare arrays
+    known_encodings = []
+    known_person_ids = []
+    
+    for kf in known_faces:
+        try:
+            arr = pickle.loads(kf.encoding)
+            known_encodings.append(arr)
+            known_person_ids.append(kf.person_id)
+        except:
+            continue
+            
+    if not known_encodings:
+        return []
+        
+    # Calculate Distances
+    # face_recognition.face_distance returns euclidean distance for each face
+    # Lower is better.
+    if FACE_REC_AVAILABLE:
+        distances = face_recognition.face_distance(known_encodings, target_encoding)
+    else:
+        # Fallback if library missing (shouldn't happen if we have encodings)
+        return []
+        
+    # Group by Person and find min distance
+    person_scores = {} # person_id -> min_distance
+    
+    for pid, dist in zip(known_person_ids, distances):
+        if pid not in person_scores:
+            person_scores[pid] = dist
+        else:
+            if dist < person_scores[pid]:
+                person_scores[pid] = dist
+                
+    # Create sorted list
+    results = []
+    all_people = Person.query.all()
+    people_map = {p.id: p for p in all_people}
+    
+    # Add scored people
+    for pid, score in person_scores.items():
+        if pid in people_map:
+            results.append((people_map[pid], score))
+            
+    # Add unscored people (infinite distance)
+    for p in all_people:
+        if p.id not in person_scores:
+            results.append((p, 999.0))
+            
+    # Sort: Score ASC, then Name ASC
+    results.sort(key=lambda x: (x[1], x[0].name))
+    
+    return results
